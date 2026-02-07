@@ -1766,6 +1766,71 @@ void tx_tx_reg_res_dis_set(struct aq_hw *aq_hw, u32 tx_reg_res_dis)
 }
 
 /* msm */
+u32 reg_mac_msm_rx_errs_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_errs_cnt_adr);
+}
+
+u32 reg_mac_msm_rx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_ucst_frm_cnt_adr);
+}
+
+u32 reg_mac_msm_rx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_mcst_frm_cnt_adr);
+}
+
+u32 reg_mac_msm_rx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_bcst_frm_cnt_adr);
+}
+
+u32 reg_mac_msm_rx_bcst_octets_counter1get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_bcst_octets_counter1_adr);
+}
+
+u32 reg_mac_msm_rx_ucst_octets_counter0get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_ucst_octets_counter0_adr);
+}
+
+u32 reg_mac_msm_tx_errs_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_errs_cnt_adr);
+}
+
+u32 reg_mac_msm_tx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_ucst_frm_cnt_adr);
+}
+
+u32 reg_mac_msm_tx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_mcst_frm_cnt_adr);
+}
+
+u32 reg_mac_msm_tx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_bcst_frm_cnt_adr);
+}
+
+u32 reg_mac_msm_tx_mcst_octets_counter1get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_mcst_octets_counter1_adr);
+}
+
+u32 reg_mac_msm_tx_bcst_octets_counter1get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_bcst_octets_counter1_adr);
+}
+
+u32 reg_mac_msm_tx_ucst_octets_counter0get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_ucst_octets_counter0_adr);
+}
+
 u32 msm_reg_access_status_get(struct aq_hw *aq_hw)
 {
     return AQ_READ_REG_BIT(aq_hw, msm_reg_access_busy_adr,
@@ -1908,6 +1973,11 @@ u32 mif_mcp_up_mailbox_data_get(struct aq_hw *hw)
     return AQ_READ_REG(hw, mif_mcp_up_mailbox_data_adr);
 }
 
+void mif_mcp_up_mailbox_data_set(struct aq_hw *hw, u32 value)
+{
+    AQ_WRITE_REG(hw, mif_mcp_up_mailbox_data_adr, value);
+}
+
 void hw_atl_rpfl3l4_ipv4_dest_addr_clear(struct aq_hw_s *aq_hw, u8 location)
 {
 	aq_hw_write_reg(aq_hw, HW_ATL_RX_GET_ADDR_DESTA_FL3L4(location), 0U);
@@ -1964,7 +2034,7 @@ void hw_atl_rpfl3l4_cmd_set(struct aq_hw_s *aq_hw, u8 location, u32 cmd)
 }
 
 void hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, u8 location,
-				      u32 *ipv6_src)
+				      const u32 *ipv6_src)
 {
 	int i;
 
@@ -1975,7 +2045,7 @@ void hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, u8 location,
 }
 
 void hw_atl_rpfl3l4_ipv6_dest_addr_set(struct aq_hw_s *aq_hw, u8 location,
-				       u32 *ipv6_dest)
+				       const u32 *ipv6_dest)
 {
 	int i;
 

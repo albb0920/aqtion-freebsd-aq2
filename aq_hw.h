@@ -142,6 +142,8 @@ struct aq_hw_fc_info {
     bool fc_tx;
 };
 
+#define AQ_FW_RPC_MAX 256U
+
 struct aq_hw {
     void *aq_dev;
     u8 *hw_addr;
@@ -176,6 +178,16 @@ struct aq_hw {
 
     u32 mbox_addr;
     struct aq_hw_fw_mbox mbox;
+    u32 rpc_addr;
+    u16 rpc_tid;
+    u16 rpc_len;
+    u8 rpc_buf[AQ_FW_RPC_MAX];
+    u32 settings_addr;
+
+    u32 art_base_index;
+    u8 aq2_iface_ver;
+    u32 wol_flags;
+    u32 eee_rate;
 };
 
 #define aq_hw_s aq_hw
@@ -183,6 +195,7 @@ struct aq_hw {
 #define AQ_HW_MAC      0U
 #define AQ_HW_MAC_MIN  1U
 #define AQ_HW_MAC_MAX  33U
+#define AQ2_HW_MAC_MAX 38U
 
 #define HW_ATL_B0_MIN_RXD 32U
 #define HW_ATL_B0_MIN_TXD 32U
@@ -199,6 +212,7 @@ struct aq_hw {
 #define AQ_HW_MPI_STATE_MSK    0x00FFU
 #define AQ_HW_MPI_STATE_SHIFT  0U
 
+#define AQ_HW_MPI_RPC_ADDR          0x0334U
 #define AQ_HW_MPI_CONTROL_ADR       0x0368U
 #define AQ_HW_MPI_STATE_ADR         0x036CU
 
@@ -212,6 +226,8 @@ struct aq_hw {
 
 #define AQ_HW_TXBUF_MAX  160U
 #define AQ_HW_RXBUF_MAX  320U
+#define AQ2_HW_TXBUF_MAX 128U
+#define AQ2_HW_RXBUF_MAX 192U
 
 #define L2_FILTER_ACTION_DISCARD (0x0)
 #define L2_FILTER_ACTION_HOST    (0x1)
@@ -221,13 +237,18 @@ struct aq_hw {
 #define AQ_HW_CHIP_TPO2         0x00000002U
 #define AQ_HW_CHIP_RPF2         0x00000004U
 #define AQ_HW_CHIP_MPI_AQ       0x00000010U
+#define AQ_HW_CHIP_ANTIGUA      0x08000000U
 #define AQ_HW_CHIP_REVISION_A0  0x01000000U
 #define AQ_HW_CHIP_REVISION_B0  0x02000000U
 #define AQ_HW_CHIP_REVISION_B1  0x04000000U
 #define IS_CHIP_FEATURE(HW, _F_) (AQ_HW_CHIP_##_F_ & \
     (HW)->chip_features)
+#define AQ_HW_IS_AQ2(HW) (IS_CHIP_FEATURE((HW), ANTIGUA))
 
 #define AQ_HW_FW_VER_EXPECTED 0x01050006U
+
+#define AQ_WOL_MAGIC 0x00000001U
+#define AQ_WOL_PHY   0x00000002U
 
 #define	AQ_RX_RSS_TYPE_NONE		0x0
 #define	AQ_RX_RSS_TYPE_IPV4		0x2
@@ -254,6 +275,9 @@ struct aq_rx_filter_vlan {
 
 #define AQ_HW_VLAN_MAX_FILTERS         16U
 #define AQ_HW_ETYPE_MAX_FILTERS        16U
+#define AQ_HW_L3L4_MAX_FILTERS         8U
+#define AQ_RX_FIRST_LOC_FL3L4          0U
+#define AQ_RX_LAST_LOC_FL3L4           (AQ_HW_L3L4_MAX_FILTERS - 1U)
 
 struct aq_rx_filter_l2 {
 	u8 enable;
@@ -319,12 +343,18 @@ int aq_hw_get_mac_permanent(struct aq_hw *hw, u8 *mac);
 
 int aq_hw_mac_addr_set(struct aq_hw *hw, u8 *mac_addr, u8 index);
 
+int aq_hw_filter_l2_set(struct aq_hw *hw, struct aq_rx_filter_l2 *data);
+int aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data);
+int aq_hw_filter_l3l4_set(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data);
+int aq_hw_filter_l3l4_clear(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data);
+
 /* link speed in mbps. "0" - no link detected */
 int aq_hw_get_link_state(struct aq_hw *hw, u32 *link_speed, struct aq_hw_fc_info *fc_neg);
 
 int aq_hw_set_link_speed(struct aq_hw *hw, u32 speed);
 
 int aq_hw_fw_downld_dwords(struct aq_hw *hw, u32 a, u32 *p, u32 cnt);
+int aq_hw_fw_upload_dwords(struct aq_hw *hw, u32 a, const u32 *p, u32 cnt);
 
 int aq_hw_reset(struct aq_hw *hw);
 
@@ -347,6 +377,11 @@ int aq_hw_ver_match(const aq_hw_fw_version* ver_expected, const aq_hw_fw_version
 void aq_hw_set_promisc(struct aq_hw_s *self, bool l2_promisc, bool vlan_promisc, bool mc_promisc);
 
 int aq_hw_set_power(struct aq_hw *hw, unsigned int power_state);
+int aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c);
+int aq_hw_get_cable_len(struct aq_hw *hw, u8 *len);
+int aq_hw_get_cable_diag(struct aq_hw *hw, u32 lane_data[4]);
+int aq_hw_set_eee_rate(struct aq_hw *hw, u32 rate);
+int aq_hw_get_eee_rate(struct aq_hw *hw, u32 *rate, u32 *supported, u32 *lp_rate);
 
 int aq_hw_err_from_flags(struct aq_hw *hw);
 
@@ -354,6 +389,8 @@ int hw_atl_b0_hw_vlan_promisc_set(struct aq_hw_s *self, bool promisc);
 
 int hw_atl_b0_hw_vlan_set(struct aq_hw_s *self,
                   struct aq_rx_filter_vlan *aq_vlans);
+int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans);
+int aq2_hw_vlan_ctrl(struct aq_hw_s *self, bool enable);
 
 int aq_hw_rss_hash_set(struct aq_hw_s *self, u8 rss_key[HW_ATL_RSS_HASHKEY_SIZE]);
 int aq_hw_rss_hash_get(struct aq_hw_s *self, u8 rss_key[HW_ATL_RSS_HASHKEY_SIZE]);
@@ -361,4 +398,3 @@ int aq_hw_rss_set(struct aq_hw_s *self, u8 rss_table[HW_ATL_RSS_INDIRECTION_TABL
 int aq_hw_udp_rss_enable(struct aq_hw_s *self, bool enable);
 
 #endif //_AQ_HW_H_
-

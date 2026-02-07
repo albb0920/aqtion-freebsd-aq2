@@ -49,6 +49,7 @@ __FBSDID("$FreeBSD$");
 #include "aq_device.h"
 
 #include "aq_fw.h"
+#include "aq_hw.h"
 #include "aq_dbg.h"
 
 #define	AQ_HW_SUPPORT_SPEED(softc, s) ((softc)->link_speeds & s)
@@ -64,6 +65,10 @@ void aq_mediastatus_update(aq_dev_t *aq_dev, u32 link_speed, const struct aq_hw_
 	    aq_dev->media_active |= IFM_ETH_TXPAUSE;
 
 	switch(link_speed) {
+	case 10:
+		aq_dev->media_active |= IFM_10_T | IFM_FDX;
+	break;
+
 	case 100:
 		aq_dev->media_active |= IFM_100_TX | IFM_FDX;
 	break;
@@ -127,6 +132,8 @@ int aq_mediachange(if_t ifp)
 	switch (user_media) {
 	case IFM_AUTO: // auto-select media
 		hw->link_rate = aq_fw_speed_auto;
+		if (!AQ_HW_IS_AQ2(hw))
+			hw->link_rate &= ~aq_fw_10M;
 		media_rate = -1;
 	break;
 
@@ -139,6 +146,11 @@ int aq_mediachange(if_t ifp)
 	case IFM_100_TX:
 		hw->link_rate = aq_fw_100M;
 		media_rate = 100 * 1000;
+	break;
+
+	case IFM_10_T:
+		hw->link_rate = aq_fw_10M;
+		media_rate = 10 * 1000;
 	break;
 
 	case IFM_1000_T:
@@ -203,6 +215,8 @@ void aq_initmedia(aq_dev_t *aq_dev)
 
 	if (AQ_HW_SUPPORT_SPEED(aq_dev, AQ_LINK_100M))
 		aq_add_media_types(aq_dev, IFM_100_TX);
+	if (AQ_HW_SUPPORT_SPEED(aq_dev, AQ_LINK_10M))
+		aq_add_media_types(aq_dev, IFM_10_T);
 	if (AQ_HW_SUPPORT_SPEED(aq_dev, AQ_LINK_1G))
 		aq_add_media_types(aq_dev, IFM_1000_T);
 	if (AQ_HW_SUPPORT_SPEED(aq_dev, AQ_LINK_2G5))

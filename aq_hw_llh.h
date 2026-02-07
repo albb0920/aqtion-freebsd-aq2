@@ -1021,6 +1021,7 @@ void mif_mcp_up_mailbox_addr_set(struct aq_hw *hw, u32 value);
 
 /* get mif uP mailbox data */
 u32 mif_mcp_up_mailbox_data_get(struct aq_hw *aq_hw);
+void mif_mcp_up_mailbox_data_set(struct aq_hw *aq_hw, u32 value);
 
 /* clear ipv4 filter destination address */
 void hw_atl_rpfl3l4_ipv4_dest_addr_clear(struct aq_hw *aq_hw, u8 location);
@@ -1050,11 +1051,11 @@ void hw_atl_rpfl3l4_cmd_set(struct aq_hw *aq_hw, u8 location, u32 cmd);
 
 /* set ipv6 filter source address */
 void hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw *aq_hw, u8 location,
-				      u32 *ipv6_src);
+				      const u32 *ipv6_src);
 
 /* set ipv6 filter destination address */
 void hw_atl_rpfl3l4_ipv6_dest_addr_set(struct aq_hw *aq_hw, u8 location,
-				       u32 *ipv6_dest);
+				       const u32 *ipv6_dest);
 
 /* set vlan inner ethertype */
 void hw_atl_rpf_vlan_inner_etht_set(struct aq_hw *aq_hw, u32 vlan_inner_etht);

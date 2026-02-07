@@ -94,6 +94,21 @@
 /* preprocessor definitions for msm tx multicast frames counter register */
 #define mac_msm_tx_mcst_frm_cnt_adr 0x00000110u
 
+/* preprocessor definitions for msm tx broadcast frames counter register */
+#define mac_msm_tx_bcst_frm_cnt_adr 0x00000118u
+
+/* preprocessor definitions for msm tx errors counter register */
+#define mac_msm_tx_errs_cnt_adr 0x00000140u
+
+/* preprocessor definitions for msm tx unicast octets counter register 0 */
+#define mac_msm_tx_ucst_octets_counter0_adr 0x00000150u
+
+/* preprocessor definitions for msm tx multicast octets counter register 1 */
+#define mac_msm_tx_mcst_octets_counter1_adr 0x00000158u
+
+/* preprocessor definitions for msm tx broadcast octets counter register 1 */
+#define mac_msm_tx_bcst_octets_counter1_adr 0x00000160u
+
 /*!  @name Global FW Image Identification 1 Definitions
 *
 *   Preprocessor definitions for Global FW Image Identification 1
