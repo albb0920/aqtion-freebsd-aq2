@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/bitstring.h>
+#include <sys/libkern.h>
 #include <sys/bus.h>
 #include <sys/endian.h>
 #include <sys/kernel.h>
@@ -52,7 +53,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/socket.h>
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
-
+#include <sys/systm.h>
 #include <machine/bus.h>
 #include <machine/resource.h>
 
@@ -108,6 +109,15 @@ char aq_driver_version[] = AQ_VER;
 #define AQ_DEVICE_ID_AQC111S	0x91B1
 #define AQ_DEVICE_ID_AQC112S	0x92B1
 
+#define AQ_DEVICE_ID_AQC113DEV	0x00C0
+#define AQ_DEVICE_ID_AQC113CS	0x94C0
+#define AQ_DEVICE_ID_AQC113CA	0x34C0
+#define AQ_DEVICE_ID_AQC114CS	0x93C0
+#define AQ_DEVICE_ID_AQC113	0x04C0
+#define AQ_DEVICE_ID_AQC113C	0x14C0
+#define AQ_DEVICE_ID_AQC115C	0x12C0
+#define AQ_DEVICE_ID_AQC116C	0x11C0
+
 static pci_vendor_info_t aq_vendor_info_array[] = {
 	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_0001,
 	    "Aquantia AQtion 10Gbit Network Adapter"),
@@ -145,6 +155,15 @@ static pci_vendor_info_t aq_vendor_info_array[] = {
 	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC112S,
 	    "Aquantia AQtion 2.5Gbit Network Adapter"),
 
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC113DEV, "Aquantia AQtion 10Gbit Network Adapter"),
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC113CS, "Aquantia AQtion 10Gbit Network Adapter"),
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC113CA, "Aquantia AQtion 10Gbit Network Adapter"),
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC114CS, "Aquantia AQtion 10Gbit Network Adapter"),
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC113, "Aquantia AQtion 10Gbit Network Adapter"),
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC113C, "Aquantia AQtion 10Gbit Network Adapter"),
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC115C, "Aquantia AQtion 2.5Gbit Network Adapter"),
+	PVID(AQUANTIA_VENDOR_ID, AQ_DEVICE_ID_AQC116C, "Aquantia AQtion 1Gbit Network Adapter"),
+
 	PVID_END
 };
 
@@ -177,6 +196,20 @@ static uint64_t aq_if_get_counter(if_ctx_t ctx, ift_counter cnt);
 static void aq_if_timer(if_ctx_t ctx, uint16_t qid);
 static int aq_hw_capabilities(struct aq_dev *softc);
 static void aq_add_stats_sysctls(struct aq_dev *softc);
+static int aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_cable_len(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_eee_supported(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_eee_lp_rate(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_l2_filter(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_vlan_filter(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_wol_phy(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_downshift(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_loopback(SYSCTL_HANDLER_ARGS);
 
 /* Interrupt enable / disable */
 static void	aq_if_enable_intr(if_ctx_t ctx);
@@ -187,6 +220,7 @@ static int	aq_if_msix_intr_assign(if_ctx_t ctx, int msix);
 /* VLAN support */
 static bool aq_is_vlan_promisc_required(struct aq_dev *softc);
 static void aq_update_vlan_filters(struct aq_dev *softc);
+static void aq_apply_rx_filters(struct aq_dev *softc);
 static void aq_if_vlan_register(if_ctx_t ctx, uint16_t vtag);
 static void aq_if_vlan_unregister(if_ctx_t ctx, uint16_t vtag);
 
@@ -354,11 +388,51 @@ aq_if_attach_pre(if_ctx_t ctx)
 	softc->mmio_size = rman_get_size(softc->mmio_res);
 	softc->hw.hw_addr = (uint8_t*) softc->mmio_handle;
 	hw = &softc->hw;
+	hw->aq_dev = softc;
+	hw->device_id = pci_get_device(softc->dev);
+	switch (hw->device_id) {
+	case AQ_DEVICE_ID_AQC113DEV:
+	case AQ_DEVICE_ID_AQC113CS:
+	case AQ_DEVICE_ID_AQC113CA:
+	case AQ_DEVICE_ID_AQC114CS:
+	case AQ_DEVICE_ID_AQC113:
+	case AQ_DEVICE_ID_AQC113C:
+	case AQ_DEVICE_ID_AQC115C:
+	case AQ_DEVICE_ID_AQC116C:
+		hw->chip_features |= AQ_HW_CHIP_ANTIGUA;
+		break;
+	default:
+		break;
+	}
 	hw->link_rate = aq_fw_speed_auto;
+	if (!AQ_HW_IS_AQ2(hw))
+		hw->link_rate &= ~aq_fw_10M;
 	hw->itr = -1;
 	hw->fc.fc_rx = 1;
 	hw->fc.fc_tx = 1;
+	hw->eee_rate = 0;
 	softc->linkup = 0U;
+	softc->wol_phy = false;
+	softc->wol_mask = 0;
+	softc->downshift = 0;
+	softc->media_detect = false;
+	softc->loopback_mode = 0;
+	hw->rpc_addr = 0;
+	hw->rpc_tid = 0;
+	hw->rpc_len = 0;
+	memset(hw->rpc_buf, 0, sizeof(hw->rpc_buf));
+	hw->settings_addr = 0;
+	for (int i = 0; i < AQ_HW_ETYPE_MAX_FILTERS; i++) {
+		softc->rx_filters.etype_filters[i].queue = -1;
+		softc->rx_filters.etype_filters[i].location = (uint8_t)i;
+	}
+	for (int i = 0; i < AQ_HW_L3L4_MAX_FILTERS; i++) {
+		softc->rx_filters.l3l4_filters[i].location = (uint8_t)i;
+	}
+	for (int i = 0; i < AQ_HW_VLAN_MAX_FILTERS; i++) {
+		softc->rx_filters.vlan_filters[i].queue = 0xFF;
+		softc->rx_filters.vlan_filters[i].location = (uint8_t)i;
+	}
 
 	/* Look up ops and caps. */
 	rc = aq_hw_mpi_create(hw);
@@ -388,16 +462,30 @@ aq_if_attach_pre(if_ctx_t ctx)
 #endif
 	scctx->isc_tx_csum_flags = CSUM_IP | CSUM_TCP | CSUM_UDP | CSUM_TSO;
 #if __FreeBSD__ >= 12
-	scctx->isc_capabilities = IFCAP_RXCSUM | IFCAP_TXCSUM | IFCAP_HWCSUM |
-	    IFCAP_TSO | IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER | IFCAP_VLAN_MTU |
-	    IFCAP_VLAN_HWTAGGING | IFCAP_VLAN_HWCSUM;
+	scctx->isc_capabilities = IFCAP_RXCSUM | IFCAP_TXCSUM | IFCAP_HWCSUM | IFCAP_TSO |
+							  IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER |
+							  IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING |
+							  IFCAP_VLAN_HWCSUM;
+#ifdef IFCAP_WOL_MAGIC
+	scctx->isc_capabilities |= IFCAP_WOL_MAGIC;
+#elif defined(IFCAP_WOL)
+	scctx->isc_capabilities |= IFCAP_WOL;
+#endif
 	scctx->isc_capenable = scctx->isc_capabilities;
 #else
 	if_t ifp;
+	int cap;
 	ifp = iflib_get_ifp(ctx);
-	if_setcapenable(ifp,  IFCAP_RXCSUM | IFCAP_TXCSUM | IFCAP_HWCSUM |
-	    IFCAP_TSO | IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER | IFCAP_VLAN_MTU |
-	    IFCAP_VLAN_HWTAGGING | IFCAP_VLAN_HWCSUM;
+	cap = IFCAP_RXCSUM | IFCAP_TXCSUM | IFCAP_HWCSUM | IFCAP_TSO |
+	    IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER |
+	    IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING |
+	    IFCAP_VLAN_HWCSUM;
+#ifdef IFCAP_WOL_MAGIC
+	cap |= IFCAP_WOL_MAGIC;
+#elif defined(IFCAP_WOL)
+	cap |= IFCAP_WOL;
+#endif
+	if_setcapenable(ifp, cap);
 #endif
 	scctx->isc_tx_nsegments = 31,
 	scctx->isc_tx_tso_segments_max = 31;
@@ -466,7 +554,7 @@ aq_if_attach_post(if_ctx_t ctx)
 	aq_add_stats_sysctls(softc);
 	/* RSS */
 	arc4rand(softc->rss_key, HW_ATL_RSS_HASHKEY_SIZE, 0);
-	for (int i = ARRAY_SIZE(softc->rss_table); i--;){
+	for (int i = ARRAY_SIZE(softc->rss_table); i--;) {
 		softc->rss_table[i] = i & (softc->rx_rings_count - 1);
 	}
 exit:
@@ -504,10 +592,24 @@ aq_if_detach(if_ctx_t ctx)
 static int
 aq_if_shutdown(if_ctx_t ctx)
 {
+	struct aq_dev *softc = iflib_get_softc(ctx);
+	if_t ifp = iflib_get_ifp(ctx);
 
 	AQ_DBG_ENTER();
 
-	AQ_XXX_UNIMPLEMENTED_FUNCTION;
+	aq_if_stop(ctx);
+#ifdef IFCAP_WOL_MAGIC
+	softc->hw.wol_flags =
+	    (if_getcapenable(ifp) & IFCAP_WOL_MAGIC) ? AQ_WOL_MAGIC : 0;
+#elif defined(IFCAP_WOL)
+	softc->hw.wol_flags =
+	    (if_getcapenable(ifp) & IFCAP_WOL) ? AQ_WOL_MAGIC : 0;
+#else
+	softc->hw.wol_flags = 0;
+#endif
+	if (softc->wol_phy)
+		softc->hw.wol_flags |= AQ_WOL_PHY;
+	aq_hw_set_power(&softc->hw, 0);
 
 	AQ_DBG_EXIT(0);
 	return (0);
@@ -516,9 +618,24 @@ aq_if_shutdown(if_ctx_t ctx)
 static int
 aq_if_suspend(if_ctx_t ctx)
 {
+	struct aq_dev *softc = iflib_get_softc(ctx);
+	if_t ifp = iflib_get_ifp(ctx);
+
 	AQ_DBG_ENTER();
 
-	AQ_XXX_UNIMPLEMENTED_FUNCTION;
+	aq_if_stop(ctx);
+#ifdef IFCAP_WOL_MAGIC
+	softc->hw.wol_flags =
+	    (if_getcapenable(ifp) & IFCAP_WOL_MAGIC) ? AQ_WOL_MAGIC : 0;
+#elif defined(IFCAP_WOL)
+	softc->hw.wol_flags =
+	    (if_getcapenable(ifp) & IFCAP_WOL) ? AQ_WOL_MAGIC : 0;
+#else
+	softc->hw.wol_flags = 0;
+#endif
+	if (softc->wol_phy)
+		softc->hw.wol_flags |= AQ_WOL_PHY;
+	aq_hw_set_power(&softc->hw, 0);
 
 	AQ_DBG_EXIT(0);
 	return (0);
@@ -529,7 +646,7 @@ aq_if_resume(if_ctx_t ctx)
 {
 	AQ_DBG_ENTER();
 
-	AQ_XXX_UNIMPLEMENTED_FUNCTION;
+	aq_if_init(ctx);
 
 	AQ_DBG_EXIT(0);
 	return (0);
@@ -551,7 +668,7 @@ aq_if_tx_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs,
 	for (i = 0; i < ntxqsets; i++) {
 		ring = softc->tx_rings[i] = malloc(sizeof(struct aq_ring),
 						   M_AQ, M_NOWAIT | M_ZERO);
-		if (!ring){
+		if (!ring) {
 			rc = ENOMEM;
 			device_printf(softc->dev, "atlantic: tx_ring malloc fail\n");
 			goto fail;
@@ -589,7 +706,7 @@ aq_if_rx_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs,
 	for (i = 0; i < nrxqsets; i++) {
 		ring = softc->rx_rings[i] = malloc(sizeof(struct aq_ring),
 						   M_AQ, M_NOWAIT | M_ZERO);
-		if (!ring){
+		if (!ring) {
 			rc = ENOMEM;
 			device_printf(softc->dev,
 			    "atlantic: rx_ring malloc fail\n");
@@ -642,7 +759,7 @@ aq_if_queues_free(if_ctx_t ctx)
 	}
 	softc->tx_rings_count = 0;
 	for (i = 0; i < softc->rx_rings_count; i++) {
-		if (softc->rx_rings[i]){
+		if (softc->rx_rings[i]) {
 			free(softc->rx_rings[i], M_AQ);
 			softc->rx_rings[i] = NULL;
 		}
@@ -675,6 +792,7 @@ aq_if_init(if_ctx_t ctx)
 	aq_if_media_status(ctx, &ifmr);
 
 	aq_update_vlan_filters(softc);
+	aq_apply_rx_filters(softc);
 
 	for (i = 0; i < softc->tx_rings_count; i++) {
 		struct aq_ring *ring = softc->tx_rings[i];
@@ -710,6 +828,13 @@ aq_if_init(if_ctx_t ctx)
 	aq_hw_rss_set(&softc->hw, softc->rss_table);
 	aq_hw_udp_rss_enable(hw, aq_enable_rss_udp);
 	aq_hw_set_link_speed(hw, hw->link_rate);
+	aq_hw_set_eee_rate(hw, hw->eee_rate);
+	if (hw->fw_ops == &aq_fw2x_ops) {
+		if (softc->downshift)
+			fw2x_set_downshift(hw, softc->downshift);
+		fw2x_set_media_detect(hw, softc->media_detect);
+		fw2x_set_loopback(hw, softc->loopback_mode);
+	}
 
 	AQ_DBG_EXIT(0);
 }
@@ -771,8 +896,8 @@ aq_mc_filter_apply(void *arg, struct sockaddr_dl *dl, u_int count)
 	struct aq_dev *softc = arg;
 	struct aq_hw *hw = &softc->hw;
 	uint8_t *mac_addr = NULL;
-
-	if (count == AQ_HW_MAC_MAX)
+	uint32_t mac_max = AQ_HW_IS_AQ2(hw) ? AQ2_HW_MAC_MAX : AQ_HW_MAC_MAX;
+	if (count == mac_max)
 		return (0);
 
 	mac_addr = LLADDR(dl);
@@ -788,10 +913,10 @@ aq_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
 	struct aq_dev *softc = arg;
 	struct aq_hw *hw = &softc->hw;
 	uint8_t *mac_addr = NULL;
-
+	uint32_t mac_max = AQ_HW_IS_AQ2(hw) ? AQ2_HW_MAC_MAX : AQ_HW_MAC_MAX;
 	if (ifma->ifma_addr->sa_family != AF_LINK)
 		return (0);
-	if (count == AQ_HW_MAC_MAX)
+	if (count == mac_max)
 		return (0);
 
 	mac_addr = LLADDR((struct sockaddr_dl *)ifma->ifma_addr);
@@ -805,6 +930,8 @@ aq_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
 static bool
 aq_is_mc_promisc_required(struct aq_dev *softc)
 {
+	if (AQ_HW_IS_AQ2(&softc->hw))
+		return (softc->mcnt >= AQ2_HW_MAC_MAX);
 	return (softc->mcnt >= AQ_HW_MAC_MAX);
 }
 
@@ -818,9 +945,12 @@ aq_if_multi_set(if_ctx_t ctx)
 #if __FreeBSD_version >= 1300054
 	softc->mcnt = if_llmaddr_count(iflib_get_ifp(ctx));
 #else
-	softc->mcnt = if_multiaddr_count(iflib_get_ifp(ctx), AQ_HW_MAC_MAX);
+	if (AQ_HW_IS_AQ2(hw))
+		softc->mcnt = if_multiaddr_count(iflib_get_ifp(ctx), AQ2_HW_MAC_MAX);
+	else
+		softc->mcnt = if_multiaddr_count(iflib_get_ifp(ctx), AQ_HW_MAC_MAX);
 #endif
-	if (softc->mcnt >= AQ_HW_MAC_MAX) {
+	if (aq_is_mc_promisc_required(softc)) {
 		aq_hw_set_promisc(hw, !!(if_getflags(ifp) & IFF_PROMISC),
 		    aq_is_vlan_promisc_required(softc),
 		    !!(if_getflags(ifp) & IFF_ALLMULTI) || aq_is_mc_promisc_required(softc));
@@ -868,7 +998,7 @@ aq_if_media_change(if_ctx_t ctx)
 	AQ_DBG_ENTER();
 
 	/* Not allowd in UP state, since causes unsync of rings */
-	if ((if_getflags(ifp) & IFF_UP)){
+	if ((if_getflags(ifp) & IFF_UP)) {
 		rc = EPERM;
 		goto exit;
 	}
@@ -971,6 +1101,7 @@ aq_if_msix_intr_assign(if_ctx_t ctx, int msix)
 	int i, vector = 0, rc;
 	char irq_name[16];
 	int rx_vectors;
+	int last_rx_irq = -1;
 
 	AQ_DBG_ENTER();
 	softc = iflib_get_softc(ctx);
@@ -985,11 +1116,11 @@ aq_if_msix_intr_assign(if_ctx_t ctx, int msix)
 
 		if (rc) {
 			device_printf(softc->dev, "failed to set up RX handler\n");
-			i--;
 			goto fail;
 		}
 
 		softc->rx_rings[i]->msix = vector;
+		last_rx_irq = i;
 	}
 
 	rx_vectors = vector;
@@ -1010,16 +1141,14 @@ aq_if_msix_intr_assign(if_ctx_t ctx, int msix)
 	device_printf(softc->dev, "Assign IRQ %u to admin proc \n",
 	    rx_vectors);
 	if (rc) {
-		device_printf(iflib_get_dev(ctx),
-		    "Failed to register admin handler");
-		i = softc->rx_rings_count;
+		device_printf(iflib_get_dev(ctx), "Failed to register admin handler");
 		goto fail;
 	}
 	AQ_DBG_EXIT(0);
 	return (0);
 
 fail:
-	for (; i >= 0; i--)
+	for (i = last_rx_irq; i >= 0; i--)
 		iflib_irq_free(ctx, &softc->rx_rings[i]->irq);
 	AQ_DBG_EXIT(rc);
 	return (rc);
@@ -1044,26 +1173,103 @@ aq_update_vlan_filters(struct aq_dev *softc)
 {
 	struct aq_rx_filter_vlan aq_vlans[AQ_HW_VLAN_MAX_FILTERS];
 	struct aq_hw  *hw = &softc->hw;
+	bool used[4096];
 	int bit_pos = 0;
 	int vlan_tag = -1;
 	int i;
 
-	hw_atl_b0_hw_vlan_promisc_set(hw, true);
+	memset(used, 0, sizeof(used));
+	memset(aq_vlans, 0, sizeof(aq_vlans));
+
+	if (AQ_HW_IS_AQ2(hw))
+		aq2_hw_vlan_ctrl(hw, false);
+	else
+		hw_atl_b0_hw_vlan_promisc_set(hw, true);
+
 	for (i = 0; i < AQ_HW_VLAN_MAX_FILTERS; i++) {
-		bit_ffs_at(softc->vlan_tags, bit_pos, 4096, &vlan_tag);
+		struct aq_rx_filter_vlan *flt = &softc->rx_filters.vlan_filters[i];
+
+		if (!flt->enable)
+			continue;
+		if (!bit_test(softc->vlan_tags, flt->vlan_id)) {
+			memset(flt, 0, sizeof(*flt));
+			flt->location = (uint8_t)i;
+			flt->queue = 0xFF;
+			continue;
+		}
+		if (flt->queue != 0xFF &&
+		    flt->queue >= softc->rx_rings_count) {
+			memset(flt, 0, sizeof(*flt));
+			flt->location = (uint8_t)i;
+			flt->queue = 0xFF;
+			continue;
+		}
+		aq_vlans[i] = *flt;
+		aq_vlans[i].location = (uint8_t)i;
+		used[flt->vlan_id] = true;
+	}
+
+	for (i = 0; i < AQ_HW_VLAN_MAX_FILTERS; i++) {
+		if (aq_vlans[i].enable)
+			continue;
+
+		while (1) {
+			bit_ffs_at(softc->vlan_tags, bit_pos, 4096, &vlan_tag);
+			if (vlan_tag == -1)
+				break;
+			bit_pos = vlan_tag + 1;
+			if (!used[vlan_tag])
+				break;
+		}
 		if (vlan_tag != -1) {
 			aq_vlans[i].enable = true;
-			aq_vlans[i].location = i;
+			aq_vlans[i].location = (uint8_t)i;
 			aq_vlans[i].queue = 0xFF;
-			aq_vlans[i].vlan_id = vlan_tag;
-			bit_pos = vlan_tag;
-		} else {
-			aq_vlans[i].enable = false;
+			aq_vlans[i].vlan_id = (uint16_t)vlan_tag;
+			used[vlan_tag] = true;
 		}
 	}
 
-	hw_atl_b0_hw_vlan_set(hw, aq_vlans);
-	hw_atl_b0_hw_vlan_promisc_set(hw, aq_is_vlan_promisc_required(softc));
+	if (AQ_HW_IS_AQ2(hw)) {
+		aq2_hw_vlan_set(hw, aq_vlans);
+		aq2_hw_vlan_ctrl(hw, !aq_is_vlan_promisc_required(softc));
+	} else {
+		hw_atl_b0_hw_vlan_set(hw, aq_vlans);
+		hw_atl_b0_hw_vlan_promisc_set(hw, aq_is_vlan_promisc_required(softc));
+	}
+}
+
+static void aq_apply_rx_filters(struct aq_dev *softc)
+{
+	struct aq_hw *hw = &softc->hw;
+	int i;
+	int err;
+
+	for (i = 0; i < AQ_HW_ETYPE_MAX_FILTERS; i++) {
+		struct aq_rx_filter_l2 *flt = &softc->rx_filters.etype_filters[i];
+
+		if (!flt->enable)
+			continue;
+		flt->location = (uint8_t)i;
+		err = aq_hw_filter_l2_set(hw, flt);
+		if (err != 0)
+			device_printf(softc->dev,
+			    "atlantic: l2 filter %d apply failed: %d\n",
+			    i, err);
+	}
+
+	for (i = 0; i < AQ_HW_L3L4_MAX_FILTERS; i++) {
+		struct aq_rx_filter_l3l4 *flt = &softc->rx_filters.l3l4_filters[i];
+
+		if ((flt->cmd & HW_ATL_RX_ENABLE_FLTR_L3L4) == 0)
+			continue;
+		flt->location = (uint8_t)i;
+		err = aq_hw_filter_l3l4_set(hw, flt);
+		if (err != 0)
+			device_printf(softc->dev,
+			    "atlantic: l3l4 filter %d apply failed: %d\n",
+			    i, err);
+	}
 }
 
 /* VLAN support */
@@ -1127,8 +1333,13 @@ aq_hw_capabilities(struct aq_dev *softc)
 	case AQ_DEVICE_ID_D107:
 	case AQ_DEVICE_ID_AQC107:
 	case AQ_DEVICE_ID_AQC107S:
+	case AQ_DEVICE_ID_AQC113DEV:
+	case AQ_DEVICE_ID_AQC113CS:
+	case AQ_DEVICE_ID_AQC113CA:
+	case AQ_DEVICE_ID_AQC113:
+	case AQ_DEVICE_ID_AQC113C:
 		softc->media_type = AQ_MEDIA_TYPE_TP;
-		softc->link_speeds = AQ_LINK_ALL;
+		softc->link_speeds = AQ_LINK_ALL | AQ_LINK_10M;
 		break;
 
 	case AQ_DEVICE_ID_D108:
@@ -1145,8 +1356,23 @@ aq_hw_capabilities(struct aq_dev *softc)
 	case AQ_DEVICE_ID_AQC109S:
 	case AQ_DEVICE_ID_AQC112:
 	case AQ_DEVICE_ID_AQC112S:
+	case AQ_DEVICE_ID_AQC115C:
 		softc->media_type = AQ_MEDIA_TYPE_TP;
-		softc->link_speeds = AQ_LINK_ALL & ~(AQ_LINK_10G | AQ_LINK_5G);
+		softc->link_speeds = (AQ_LINK_ALL & ~(AQ_LINK_10G | AQ_LINK_5G)) |
+		    AQ_LINK_10M;
+		break;
+
+	case AQ_DEVICE_ID_AQC114CS:
+		softc->media_type = AQ_MEDIA_TYPE_TP;
+		softc->link_speeds = (AQ_LINK_ALL & ~AQ_LINK_10G) |
+		    AQ_LINK_10M;
+		break;
+
+	case AQ_DEVICE_ID_AQC116C:
+		softc->media_type = AQ_MEDIA_TYPE_TP;
+		softc->link_speeds = (AQ_LINK_ALL &
+		    ~(AQ_LINK_10G | AQ_LINK_5G | AQ_LINK_2G5)) |
+		    AQ_LINK_10M;
 		break;
 
 	default:
@@ -1193,9 +1419,811 @@ aq_sysctl_print_rss_config(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int
-aq_sysctl_print_tx_head(SYSCTL_HANDLER_ARGS)
+static int aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS)
 {
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int temp;
+	int err;
+
+	err = aq_hw_get_phy_temp(&softc->hw, &temp);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	return sysctl_handle_int(oidp, &temp, 0, req);
+}
+
+static int aq_sysctl_cable_len(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	uint8_t len = 0;
+	int val;
+	int err;
+
+	err = aq_hw_get_cable_len(&softc->hw, &len);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	val = len;
+	return sysctl_handle_int(oidp, &val, 0, req);
+}
+
+static int aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	uint32_t lane_data[4];
+	char buf[64];
+	int err;
+
+	err = aq_hw_get_cable_diag(&softc->hw, lane_data);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	snprintf(buf, sizeof(buf), "0x%08x 0x%08x 0x%08x 0x%08x",
+	    lane_data[0], lane_data[1], lane_data[2], lane_data[3]);
+	return sysctl_handle_string(oidp, buf, 0, req);
+}
+
+static int aq_parse_u32(const char *val, uint32_t *out)
+{
+	char *endp;
+	unsigned long v;
+
+	if (val == NULL || val[0] == '\0')
+		return (EINVAL);
+	v = strtoul(val, &endp, 0);
+	if (endp == val || *endp != '\0')
+		return (EINVAL);
+	if (v > UINT32_MAX)
+		return (ERANGE);
+	*out = (uint32_t)v;
+	return (0);
+}
+
+static int aq_parse_s32(const char *val, int *out)
+{
+	char *endp;
+	long v;
+
+	if (val == NULL || val[0] == '\0')
+		return (EINVAL);
+	v = strtol(val, &endp, 0);
+	if (endp == val || *endp != '\0')
+		return (EINVAL);
+	if (v > INT_MAX || v < INT_MIN)
+		return (ERANGE);
+	*out = (int)v;
+	return (0);
+}
+
+static int aq_parse_ipv6_hex(const char *val, uint32_t out[4])
+{
+	char buf[9];
+	const char *p = val;
+	size_t len;
+	char *endp;
+	int i;
+
+	if (p == NULL || p[0] == '\0')
+		return (EINVAL);
+	if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X'))
+		p += 2;
+	len = strlen(p);
+	if (len != 32)
+		return (EINVAL);
+	for (i = 0; i < 4; i++) {
+		unsigned long v;
+		memcpy(buf, p + (i * 8), 8);
+		buf[8] = '\0';
+		if (strspn(buf, "0123456789abcdefABCDEF") != 8)
+			return (EINVAL);
+		v = strtoul(buf, &endp, 16);
+		if (endp == buf || *endp != '\0' || v > UINT32_MAX)
+			return (EINVAL);
+		out[i] = (uint32_t)v;
+	}
+	return (0);
+}
+
+static int aq_parse_bool(const char *val, bool *out)
+{
+	uint32_t v;
+	int err;
+
+	err = aq_parse_u32(val, &v);
+	if (err != 0)
+		return (err);
+	if (v != 0 && v != 1)
+		return (EINVAL);
+	*out = (v != 0);
+	return (0);
+}
+
+static const char *aq_proto_name(uint32_t cmd)
+{
+	uint32_t proto = cmd & 0x7U;
+
+	if ((cmd & HW_ATL_RX_ENABLE_CMP_PROT_L4) == 0)
+		return ("any");
+
+	switch (proto) {
+	case HW_ATL_RX_UDP:
+		return ("udp");
+	case HW_ATL_RX_SCTP:
+		return ("sctp");
+	case HW_ATL_RX_ICMP:
+		return ("icmp");
+	case HW_ATL_RX_TCP:
+	default:
+		return ("tcp");
+	}
+}
+
+static int aq_parse_proto(const char *val, int *proto, bool *cmp)
+{
+	if (val == NULL || val[0] == '\0')
+		return (EINVAL);
+	if (strcasecmp(val, "any") == 0) {
+		*cmp = false;
+		*proto = 0;
+		return (0);
+	}
+	if (strcasecmp(val, "tcp") == 0) {
+		*cmp = true;
+		*proto = HW_ATL_RX_TCP;
+		return (0);
+	}
+	if (strcasecmp(val, "udp") == 0) {
+		*cmp = true;
+		*proto = HW_ATL_RX_UDP;
+		return (0);
+	}
+	if (strcasecmp(val, "sctp") == 0) {
+		*cmp = true;
+		*proto = HW_ATL_RX_SCTP;
+		return (0);
+	}
+	if (strcasecmp(val, "icmp") == 0) {
+		*cmp = true;
+		*proto = HW_ATL_RX_ICMP;
+		return (0);
+	}
+	return (EINVAL);
+}
+
+static const char *aq_action_name(uint32_t cmd)
+{
+	uint32_t action = (cmd >> HW_ATL_RX_BOFFSET_ACTION_FL3F4) & 0x7U;
+
+	switch (action) {
+	case HW_ATL_RX_DISCARD:
+		return ("drop");
+	case HW_ATL_RX_HOST:
+	default:
+		return ("host");
+	}
+}
+
+static int aq_parse_action(const char *val, int *action)
+{
+	if (val == NULL || val[0] == '\0')
+		return (EINVAL);
+	if (strcasecmp(val, "drop") == 0) {
+		*action = HW_ATL_RX_DISCARD;
+		return (0);
+	}
+	if (strcasecmp(val, "host") == 0) {
+		*action = HW_ATL_RX_HOST;
+		return (0);
+	}
+	return (EINVAL);
+}
+
+static int aq_sysctl_l2_filter(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int location = (int)arg2;
+	struct aq_rx_filter_l2 cfg;
+	char buf[128];
+	int err;
+
+	if (location < 0 || location >= AQ_HW_ETYPE_MAX_FILTERS)
+		return (EINVAL);
+
+	cfg = softc->rx_filters.etype_filters[location];
+	snprintf(buf, sizeof(buf),
+	    "enable=%u,ethertype=0x%04x,queue=%d,prio_en=%u,prio=%u",
+	    cfg.enable ? 1U : 0U, cfg.ethertype, cfg.queue,
+	    cfg.user_priority_en ? 1U : 0U, cfg.user_priority);
+
+	err = sysctl_handle_string(oidp, buf, sizeof(buf), req);
+	if (err || !req->newptr)
+		return (err);
+	if (buf[0] == '\0')
+		return (EINVAL);
+
+	cfg.location = (uint8_t)location;
+	{
+		char *p = buf;
+		char *tok;
+
+		while ((tok = strsep(&p, ",")) != NULL) {
+			char *eq;
+
+			while (*tok == ' ' || *tok == '\t')
+				tok++;
+			if (*tok == '\0')
+				continue;
+			eq = strchr(tok, '=');
+			if (eq == NULL)
+				return (EINVAL);
+			*eq = '\0';
+			eq++;
+			if (strcmp(tok, "enable") == 0) {
+				bool v;
+				err = aq_parse_bool(eq, &v);
+				if (err != 0)
+					return (err);
+				cfg.enable = v;
+			} else if (strcmp(tok, "ethertype") == 0) {
+				uint32_t v;
+				err = aq_parse_u32(eq, &v);
+				if (err != 0 || v > 0xFFFFU)
+					return (EINVAL);
+				cfg.ethertype = (uint16_t)v;
+			} else if (strcmp(tok, "queue") == 0) {
+				int v;
+				err = aq_parse_s32(eq, &v);
+				if (err != 0)
+					return (err);
+				cfg.queue = (int8_t)v;
+			} else if (strcmp(tok, "prio_en") == 0) {
+				bool v;
+				err = aq_parse_bool(eq, &v);
+				if (err != 0)
+					return (err);
+				cfg.user_priority_en = v;
+			} else if (strcmp(tok, "prio") == 0) {
+				uint32_t v;
+				err = aq_parse_u32(eq, &v);
+				if (err != 0 || v > 7U)
+					return (EINVAL);
+				cfg.user_priority = (uint8_t)v;
+			} else {
+				return (EINVAL);
+			}
+		}
+	}
+
+	if (cfg.queue < -1)
+		return (EINVAL);
+	if (cfg.queue >= 0 && (uint32_t)cfg.queue >= softc->rx_rings_count)
+		return (EINVAL);
+
+	if (!cfg.enable) {
+		cfg.queue = -1;
+		err = aq_hw_filter_l2_clear(&softc->hw, &cfg);
+		if (err != 0)
+			return (err < 0 ? -err : err);
+		memset(&cfg, 0, sizeof(cfg));
+		cfg.location = (uint8_t)location;
+		cfg.queue = -1;
+	} else {
+		err = aq_hw_filter_l2_set(&softc->hw, &cfg);
+		if (err != 0)
+			return (err < 0 ? -err : err);
+	}
+
+	softc->rx_filters.etype_filters[location] = cfg;
+	return (0);
+}
+
+static int aq_sysctl_vlan_filter(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int location = (int)arg2;
+	struct aq_rx_filter_vlan cfg;
+	char buf[96];
+	int err;
+	int queue = -1;
+
+	if (location < 0 || location >= AQ_HW_VLAN_MAX_FILTERS)
+		return (EINVAL);
+
+	cfg = softc->rx_filters.vlan_filters[location];
+	if (cfg.queue != 0xFF)
+		queue = (int)cfg.queue;
+	snprintf(buf, sizeof(buf),
+	    "enable=%u,vlan=%u,queue=%d",
+	    cfg.enable ? 1U : 0U, cfg.vlan_id, queue);
+
+	err = sysctl_handle_string(oidp, buf, sizeof(buf), req);
+	if (err || !req->newptr)
+		return (err);
+	if (buf[0] == '\0')
+		return (EINVAL);
+
+	cfg.location = (uint8_t)location;
+	{
+		char *p = buf;
+		char *tok;
+
+		while ((tok = strsep(&p, ",")) != NULL) {
+			char *eq;
+
+			while (*tok == ' ' || *tok == '\t')
+				tok++;
+			if (*tok == '\0')
+				continue;
+			eq = strchr(tok, '=');
+			if (eq == NULL)
+				return (EINVAL);
+			*eq = '\0';
+			eq++;
+			if (strcmp(tok, "enable") == 0) {
+				bool v;
+				err = aq_parse_bool(eq, &v);
+				if (err != 0)
+					return (err);
+				cfg.enable = v;
+			} else if (strcmp(tok, "vlan") == 0) {
+				uint32_t v;
+				err = aq_parse_u32(eq, &v);
+				if (err != 0 || v > 4095U)
+					return (EINVAL);
+				cfg.vlan_id = (uint16_t)v;
+			} else if (strcmp(tok, "queue") == 0) {
+				int v;
+				err = aq_parse_s32(eq, &v);
+				if (err != 0)
+					return (err);
+				queue = v;
+			} else {
+				return (EINVAL);
+			}
+		}
+	}
+
+	if (queue < -1)
+		return (EINVAL);
+	if (queue >= 0 && (uint32_t)queue >= softc->rx_rings_count)
+		return (EINVAL);
+
+	if (!cfg.enable) {
+		memset(&cfg, 0, sizeof(cfg));
+		cfg.location = (uint8_t)location;
+		cfg.queue = 0xFF;
+		softc->rx_filters.vlan_filters[location] = cfg;
+		aq_update_vlan_filters(softc);
+		return (0);
+	}
+
+	if (!bit_test(softc->vlan_tags, cfg.vlan_id))
+		return (EINVAL);
+
+	for (int i = 0; i < AQ_HW_VLAN_MAX_FILTERS; i++) {
+		if (i == location)
+			continue;
+		if (softc->rx_filters.vlan_filters[i].enable &&
+		    softc->rx_filters.vlan_filters[i].vlan_id == cfg.vlan_id)
+			return (EEXIST);
+	}
+
+	cfg.queue = (queue < 0) ? 0xFF : (uint8_t)queue;
+	softc->rx_filters.vlan_filters[location] = cfg;
+	aq_update_vlan_filters(softc);
+	return (0);
+}
+
+static int aq_sysctl_wol_phy(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int val;
+	int err;
+
+	val = softc->wol_phy ? 1 : 0;
+	err = sysctl_handle_int(oidp, &val, 0, req);
+	if (err || !req->newptr)
+		return (err);
+
+	if (val != 0 && val != 1)
+		return (EINVAL);
+
+	softc->wol_phy = (val != 0);
+	return (0);
+}
+
+static int aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	if_t ifp = iflib_get_ifp(softc->ctx);
+	uint32_t mask;
+	uint32_t newmask;
+	int err;
+
+	mask = softc->wol_phy ? AQ_WOL_PHY : 0;
+#ifdef IFCAP_WOL_MAGIC
+	if (if_getcapenable(ifp) & IFCAP_WOL_MAGIC)
+		mask |= AQ_WOL_MAGIC;
+#elif defined(IFCAP_WOL)
+	if (if_getcapenable(ifp) & IFCAP_WOL)
+		mask |= AQ_WOL_MAGIC;
+#endif
+	newmask = mask;
+
+	err = sysctl_handle_int(oidp, (int *)&newmask, 0, req);
+	if (err || !req->newptr)
+		return (err);
+
+	if (newmask & ~(AQ_WOL_MAGIC | AQ_WOL_PHY))
+		return (EINVAL);
+
+#ifdef IFCAP_WOL_MAGIC
+	if (newmask & AQ_WOL_MAGIC)
+		if_setcapenable(ifp, if_getcapenable(ifp) | IFCAP_WOL_MAGIC);
+	else
+		if_setcapenable(ifp, if_getcapenable(ifp) & ~IFCAP_WOL_MAGIC);
+#elif defined(IFCAP_WOL)
+	if (newmask & AQ_WOL_MAGIC)
+		if_setcapenable(ifp, if_getcapenable(ifp) | IFCAP_WOL);
+	else
+		if_setcapenable(ifp, if_getcapenable(ifp) & ~IFCAP_WOL);
+#endif
+
+	softc->wol_phy = ((newmask & AQ_WOL_PHY) != 0);
+	softc->wol_mask = newmask;
+	return (0);
+}
+
+static int aq_sysctl_downshift(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int val;
+	int err;
+
+	val = (int)softc->downshift;
+	err = sysctl_handle_int(oidp, &val, 0, req);
+	if (err || !req->newptr)
+		return (err);
+	if (val < 0)
+		return (EINVAL);
+
+	if (softc->hw.fw_ops != &aq_fw2x_ops)
+		return (ENOTSUP);
+	err = fw2x_set_downshift(&softc->hw, (uint32_t)val);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	softc->downshift = (uint32_t)val;
+	return (0);
+}
+
+static int aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int val;
+	int err;
+
+	val = softc->media_detect ? 1 : 0;
+	err = sysctl_handle_int(oidp, &val, 0, req);
+	if (err || !req->newptr)
+		return (err);
+	if (val != 0 && val != 1)
+		return (EINVAL);
+
+	if (softc->hw.fw_ops != &aq_fw2x_ops)
+		return (ENOTSUP);
+	err = fw2x_set_media_detect(&softc->hw, (val != 0));
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	softc->media_detect = (val != 0);
+	return (0);
+}
+
+static int aq_sysctl_loopback(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int val;
+	int err;
+
+	val = softc->loopback_mode;
+	err = sysctl_handle_int(oidp, &val, 0, req);
+	if (err || !req->newptr)
+		return (err);
+	if (val < 0 || val > 2)
+		return (EINVAL);
+
+	if (softc->hw.fw_ops != &aq_fw2x_ops)
+		return (ENOTSUP);
+	err = fw2x_set_loopback(&softc->hw, val);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	softc->loopback_mode = val;
+	return (0);
+}
+
+static int aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int location = (int)arg2;
+	struct aq_rx_filter_l3l4 cfg;
+	char buf[256];
+	uint32_t cmd = 0;
+	int err;
+	int action = HW_ATL_RX_HOST;
+	int queue = -1;
+	bool enable = false;
+	bool ipv6 = false;
+	bool ipv6_set = false;
+	bool cmp_proto = false;
+	int proto = 0;
+	bool proto_set = false;
+	bool src_set = false;
+	bool dst_set = false;
+	bool src6_set = false;
+	bool dst6_set = false;
+
+	if (location < 0 || location >= AQ_HW_L3L4_MAX_FILTERS)
+		return (EINVAL);
+
+	cfg = softc->rx_filters.l3l4_filters[location];
+	if (cfg.cmd & HW_ATL_RX_ENABLE_QUEUE_L3L4)
+		queue = (cfg.cmd >> HW_ATL_RX_BOFFSET_QUEUE_FL3L4) & 0xFF;
+	action = (cfg.cmd >> HW_ATL_RX_BOFFSET_ACTION_FL3F4) & 0x7U;
+
+	snprintf(buf, sizeof(buf),
+	    "enable=%u,ipv6=%u,proto=%s,src=0x%08x,dst=0x%08x,"
+	    "src6=%08x%08x%08x%08x,dst6=%08x%08x%08x%08x,"
+	    "sport=%u,dport=%u,action=%s,queue=%d",
+	    (cfg.cmd & HW_ATL_RX_ENABLE_FLTR_L3L4) ? 1U : 0U,
+	    cfg.is_ipv6 ? 1U : 0U,
+	    aq_proto_name(cfg.cmd),
+	    cfg.ip_src[0], cfg.ip_dst[0],
+	    cfg.ip_src[0], cfg.ip_src[1], cfg.ip_src[2], cfg.ip_src[3],
+	    cfg.ip_dst[0], cfg.ip_dst[1], cfg.ip_dst[2], cfg.ip_dst[3],
+	    cfg.p_src, cfg.p_dst,
+	    aq_action_name(cfg.cmd),
+	    queue);
+
+	err = sysctl_handle_string(oidp, buf, sizeof(buf), req);
+	if (err || !req->newptr)
+		return (err);
+	if (buf[0] == '\0')
+		return (EINVAL);
+
+	cfg.location = (uint8_t)location;
+	enable = (cfg.cmd & HW_ATL_RX_ENABLE_FLTR_L3L4) != 0;
+	ipv6 = cfg.is_ipv6;
+	if (cfg.cmd & HW_ATL_RX_ENABLE_CMP_PROT_L4) {
+		cmp_proto = true;
+		proto = cfg.cmd & 0x7U;
+	}
+
+	{
+		char *p = buf;
+		char *tok;
+
+		while ((tok = strsep(&p, ",")) != NULL) {
+			char *eq;
+
+			while (*tok == ' ' || *tok == '\t')
+				tok++;
+			if (*tok == '\0')
+				continue;
+			eq = strchr(tok, '=');
+			if (eq == NULL)
+				return (EINVAL);
+			*eq = '\0';
+			eq++;
+			if (strcmp(tok, "enable") == 0) {
+				bool v;
+				err = aq_parse_bool(eq, &v);
+				if (err != 0)
+					return (err);
+				enable = v;
+			} else if (strcmp(tok, "ipv6") == 0) {
+				bool v;
+				err = aq_parse_bool(eq, &v);
+				if (err != 0)
+					return (err);
+				ipv6 = v;
+				ipv6_set = true;
+			} else if (strcmp(tok, "proto") == 0) {
+				err = aq_parse_proto(eq, &proto, &cmp_proto);
+				if (err != 0)
+					return (err);
+				proto_set = true;
+			} else if (strcmp(tok, "src") == 0) {
+				uint32_t v;
+				err = aq_parse_u32(eq, &v);
+				if (err != 0)
+					return (err);
+				cfg.ip_src[0] = v;
+				src_set = true;
+			} else if (strcmp(tok, "dst") == 0) {
+				uint32_t v;
+				err = aq_parse_u32(eq, &v);
+				if (err != 0)
+					return (err);
+				cfg.ip_dst[0] = v;
+				dst_set = true;
+			} else if (strcmp(tok, "src6") == 0) {
+				err = aq_parse_ipv6_hex(eq, cfg.ip_src);
+				if (err != 0)
+					return (err);
+				src6_set = true;
+			} else if (strcmp(tok, "dst6") == 0) {
+				err = aq_parse_ipv6_hex(eq, cfg.ip_dst);
+				if (err != 0)
+					return (err);
+				dst6_set = true;
+			} else if (strcmp(tok, "sport") == 0) {
+				uint32_t v;
+				err = aq_parse_u32(eq, &v);
+				if (err != 0 || v > 0xFFFFU)
+					return (EINVAL);
+				cfg.p_src = (uint16_t)v;
+			} else if (strcmp(tok, "dport") == 0) {
+				uint32_t v;
+				err = aq_parse_u32(eq, &v);
+				if (err != 0 || v > 0xFFFFU)
+					return (EINVAL);
+				cfg.p_dst = (uint16_t)v;
+			} else if (strcmp(tok, "action") == 0) {
+				err = aq_parse_action(eq, &action);
+				if (err != 0)
+					return (err);
+			} else if (strcmp(tok, "queue") == 0) {
+				err = aq_parse_s32(eq, &queue);
+				if (err != 0)
+					return (err);
+			} else {
+				return (EINVAL);
+			}
+		}
+	}
+
+	if (queue < -1)
+		return (EINVAL);
+	if (queue >= 0 && (uint32_t)queue >= softc->rx_rings_count)
+		return (EINVAL);
+	if (ipv6 && ((location & 3) != 0 || location + 3 >= AQ_HW_L3L4_MAX_FILTERS))
+		return (EINVAL);
+
+	cfg.is_ipv6 = ipv6;
+	if (ipv6_set) {
+		if (ipv6) {
+			if (!src6_set)
+				memset(cfg.ip_src, 0, sizeof(cfg.ip_src));
+			if (!dst6_set)
+				memset(cfg.ip_dst, 0, sizeof(cfg.ip_dst));
+		} else {
+			if (!src_set)
+				cfg.ip_src[0] = 0;
+			if (!dst_set)
+				cfg.ip_dst[0] = 0;
+		}
+	}
+	if (!enable) {
+		err = aq_hw_filter_l3l4_clear(&softc->hw, &cfg);
+		if (err != 0)
+			return (err < 0 ? -err : err);
+		memset(&cfg, 0, sizeof(cfg));
+		cfg.location = (uint8_t)location;
+		cfg.p_src = 0;
+		cfg.p_dst = 0;
+		softc->rx_filters.l3l4_filters[location] = cfg;
+		return (0);
+	}
+
+	cmd |= HW_ATL_RX_ENABLE_FLTR_L3L4;
+	if (ipv6)
+		cmd |= HW_ATL_RX_ENABLE_L3_IPv6;
+	if (cmp_proto || proto_set) {
+		if (cmp_proto) {
+			cmd |= HW_ATL_RX_ENABLE_CMP_PROT_L4;
+			cmd |= (uint32_t)proto;
+		}
+	}
+	if (!ipv6) {
+		if (cfg.ip_src[0])
+			cmd |= HW_ATL_RX_ENABLE_CMP_SRC_ADDR_L3;
+		if (cfg.ip_dst[0])
+			cmd |= HW_ATL_RX_ENABLE_CMP_DEST_ADDR_L3;
+	} else {
+		if (cfg.ip_src[0] || cfg.ip_src[1] || cfg.ip_src[2] || cfg.ip_src[3])
+			cmd |= HW_ATL_RX_ENABLE_CMP_SRC_ADDR_L3;
+		if (cfg.ip_dst[0] || cfg.ip_dst[1] || cfg.ip_dst[2] || cfg.ip_dst[3])
+			cmd |= HW_ATL_RX_ENABLE_CMP_DEST_ADDR_L3;
+	}
+	if (cfg.p_dst)
+		cmd |= HW_ATL_RX_ENABLE_CMP_DEST_PORT_L4;
+	if (cfg.p_src)
+		cmd |= HW_ATL_RX_ENABLE_CMP_SRC_PORT_L4;
+
+	if (action == HW_ATL_RX_DISCARD) {
+		cmd |= ((uint32_t)HW_ATL_RX_DISCARD <<
+		    HW_ATL_RX_BOFFSET_ACTION_FL3F4);
+	} else if (queue >= 0) {
+		cmd |= ((uint32_t)HW_ATL_RX_HOST << HW_ATL_RX_BOFFSET_ACTION_FL3F4);
+		cmd |= ((uint32_t)queue << HW_ATL_RX_BOFFSET_QUEUE_FL3L4);
+		cmd |= HW_ATL_RX_ENABLE_QUEUE_L3L4;
+	}
+
+	cfg.cmd = cmd;
+	err = aq_hw_filter_l3l4_set(&softc->hw, &cfg);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	softc->rx_filters.l3l4_filters[location] = cfg;
+	return (0);
+}
+
+static int aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	uint32_t rate = 0;
+	uint32_t supported = 0;
+	uint32_t lp = 0;
+	int val;
+	int err;
+
+	err = aq_hw_get_eee_rate(&softc->hw, &rate, &supported, &lp);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	val = (int)rate;
+	err = sysctl_handle_int(oidp, &val, 0, req);
+	if (err || !req->newptr)
+		return (err);
+
+	if ((uint32_t)val & ~supported)
+		return (EINVAL);
+
+	err = aq_hw_set_eee_rate(&softc->hw, (uint32_t)val);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	softc->hw.eee_rate = (uint32_t)val;
+	return (0);
+}
+
+static int aq_sysctl_eee_supported(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	uint32_t rate = 0;
+	uint32_t supported = 0;
+	uint32_t lp = 0;
+	int val;
+	int err;
+
+	err = aq_hw_get_eee_rate(&softc->hw, &rate, &supported, &lp);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	val = (int)supported;
+	return sysctl_handle_int(oidp, &val, 0, req);
+}
+
+static int aq_sysctl_eee_lp_rate(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	uint32_t rate = 0;
+	uint32_t supported = 0;
+	uint32_t lp = 0;
+	int val;
+	int err;
+
+	err = aq_hw_get_eee_rate(&softc->hw, &rate, &supported, &lp);
+	if (err != 0)
+		return (err < 0 ? -err : err);
+
+	val = (int)lp;
+	return sysctl_handle_int(oidp, &val, 0, req);
+}
+
+static int aq_sysctl_print_tx_head(SYSCTL_HANDLER_ARGS) {
 	struct aq_ring  *ring = arg1;
 	int             error = 0;
 	unsigned int   val;
@@ -1284,8 +2312,89 @@ aq_add_stats_sysctls(struct aq_dev *softc)
 	char                    namebuf[QUEUE_NAME_LEN];
 	/* RSS configuration */
 	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "print_rss_config",
-	    CTLTYPE_STRING | CTLFLAG_RD, softc, 0,
-	    aq_sysctl_print_rss_config, "A", "Prints RSS Configuration");
+		CTLTYPE_STRING | CTLFLAG_RD, softc, 0,
+		aq_sysctl_print_rss_config, "A", "Prints RSS Configuration");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "phy_temperature",
+		CTLTYPE_INT | CTLFLAG_RD, softc, 0,
+		aq_sysctl_phy_temp, "I", "PHY temperature (C)");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "cable_length",
+		CTLTYPE_INT | CTLFLAG_RD, softc, 0,
+		aq_sysctl_cable_len, "I", "Cable length");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "cable_diag",
+		CTLTYPE_STRING | CTLFLAG_RD, softc, 0,
+		aq_sysctl_cable_diag, "A", "Cable diagnostics");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "eee_rate",
+		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
+		aq_sysctl_eee_rate, "I", "EEE rate mask");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "eee_supported",
+		CTLTYPE_INT | CTLFLAG_RD, softc, 0,
+		aq_sysctl_eee_supported, "I", "EEE supported mask");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "eee_lp_rate",
+		CTLTYPE_INT | CTLFLAG_RD, softc, 0,
+		aq_sysctl_eee_lp_rate, "I", "EEE link partner mask");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "wol_phy",
+		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
+		aq_sysctl_wol_phy, "I", "Wake on link state change");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "wol_mask",
+		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
+		aq_sysctl_wol_mask, "I", "WOL mask (magic|phy)");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "downshift",
+		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
+		aq_sysctl_downshift, "I", "Downshift retry count");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "media_detect",
+		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
+		aq_sysctl_media_detect, "I", "Enable media detect");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "loopback",
+		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
+		aq_sysctl_loopback, "I", "Loopback mode (0=off,1=int,2=ext)");
+
+	{
+		struct sysctl_oid *filter_node;
+		struct sysctl_oid *l2_node;
+		struct sysctl_oid *vlan_node;
+		struct sysctl_oid *l3_node;
+		struct sysctl_oid_list *filter_list;
+		struct sysctl_oid_list *l2_list;
+		struct sysctl_oid_list *vlan_list;
+		struct sysctl_oid_list *l3_list;
+
+		filter_node = SYSCTL_ADD_NODE(ctx, child, OID_AUTO, "rx_filter",
+		    CTLFLAG_RD, NULL, "RX filter configuration");
+		filter_list = SYSCTL_CHILDREN(filter_node);
+
+		l2_node = SYSCTL_ADD_NODE(ctx, filter_list, OID_AUTO, "l2",
+		    CTLFLAG_RD, NULL, "L2 ethertype filters");
+		l2_list = SYSCTL_CHILDREN(l2_node);
+		for (int i = 0; i < AQ_HW_ETYPE_MAX_FILTERS; i++) {
+			snprintf(namebuf, QUEUE_NAME_LEN, "f%d", i);
+			SYSCTL_ADD_PROC(ctx, l2_list, OID_AUTO, namebuf,
+			    CTLTYPE_STRING | CTLFLAG_RW, softc, i,
+			    aq_sysctl_l2_filter, "A",
+			    "L2 filter: enable,ethertype,queue,prio_en,prio");
+		}
+
+		vlan_node = SYSCTL_ADD_NODE(ctx, filter_list, OID_AUTO, "vlan",
+		    CTLFLAG_RD, NULL, "VLAN filters");
+		vlan_list = SYSCTL_CHILDREN(vlan_node);
+		for (int i = 0; i < AQ_HW_VLAN_MAX_FILTERS; i++) {
+			snprintf(namebuf, QUEUE_NAME_LEN, "f%d", i);
+			SYSCTL_ADD_PROC(ctx, vlan_list, OID_AUTO, namebuf,
+			    CTLTYPE_STRING | CTLFLAG_RW, softc, i,
+			    aq_sysctl_vlan_filter, "A",
+			    "VLAN filter: enable,vlan,queue");
+		}
+
+		l3_node = SYSCTL_ADD_NODE(ctx, filter_list, OID_AUTO, "l3l4",
+		    CTLFLAG_RD, NULL, "L3/L4 filters");
+		l3_list = SYSCTL_CHILDREN(l3_node);
+		for (int i = 0; i < AQ_HW_L3L4_MAX_FILTERS; i++) {
+			snprintf(namebuf, QUEUE_NAME_LEN, "f%d", i);
+			SYSCTL_ADD_PROC(ctx, l3_list, OID_AUTO, namebuf,
+			    CTLTYPE_STRING | CTLFLAG_RW, softc, i,
+			    aq_sysctl_l3l4_filter, "A",
+			    "L3/L4 filter: enable,ipv6,proto,src,dst,src6,dst6,sport,dport,action,queue");
+		}
+	}
 
 	/* Driver Statistics */
 	for (int i = 0; i < softc->tx_rings_count; i++) {

@@ -1850,9 +1850,72 @@ tx_tx_reg_res_dis_set(struct aq_hw *aq_hw, uint32_t tx_reg_res_dis)
 }
 
 /* msm */
-uint32_t
-msm_reg_access_status_get(struct aq_hw *aq_hw)
+uint32_t reg_mac_msm_rx_errs_cnt_get(struct aq_hw *aq_hw)
 {
+    return AQ_READ_REG(aq_hw, mac_msm_rx_errs_cnt_adr);
+}
+
+uint32_t reg_mac_msm_rx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_ucst_frm_cnt_adr);
+}
+
+uint32_t reg_mac_msm_rx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_mcst_frm_cnt_adr);
+}
+
+uint32_t reg_mac_msm_rx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_bcst_frm_cnt_adr);
+}
+
+uint32_t reg_mac_msm_rx_bcst_octets_counter1get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_bcst_octets_counter1_adr);
+}
+
+uint32_t reg_mac_msm_rx_ucst_octets_counter0get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_rx_ucst_octets_counter0_adr);
+}
+
+uint32_t reg_mac_msm_tx_errs_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_errs_cnt_adr);
+}
+
+uint32_t reg_mac_msm_tx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_ucst_frm_cnt_adr);
+}
+
+uint32_t reg_mac_msm_tx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_mcst_frm_cnt_adr);
+}
+
+uint32_t reg_mac_msm_tx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_bcst_frm_cnt_adr);
+}
+
+uint32_t reg_mac_msm_tx_mcst_octets_counter1get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_mcst_octets_counter1_adr);
+}
+
+uint32_t reg_mac_msm_tx_bcst_octets_counter1get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_bcst_octets_counter1_adr);
+}
+
+uint32_t reg_mac_msm_tx_ucst_octets_counter0get(struct aq_hw *aq_hw)
+{
+    return AQ_READ_REG(aq_hw, mac_msm_tx_ucst_octets_counter0_adr);
+}
+
+uint32_t msm_reg_access_status_get(struct aq_hw *aq_hw) {
 	return AQ_READ_REG_BIT(aq_hw, msm_reg_access_busy_adr,
 	    msm_reg_access_busy_msk, msm_reg_access_busy_shift);
 }
@@ -2007,9 +2070,12 @@ mif_mcp_up_mailbox_data_get(struct aq_hw *hw)
 	return AQ_READ_REG(hw, mif_mcp_up_mailbox_data_adr);
 }
 
-void
-hw_atl_rpfl3l4_ipv4_dest_addr_clear(struct aq_hw_s *aq_hw, uint8_t location)
+void mif_mcp_up_mailbox_data_set(struct aq_hw *hw, uint32_t value)
 {
+    AQ_WRITE_REG(hw, mif_mcp_up_mailbox_data_adr, value);
+}
+
+void hw_atl_rpfl3l4_ipv4_dest_addr_clear(struct aq_hw_s *aq_hw, uint8_t location) {
 	aq_hw_write_reg(aq_hw, HW_ATL_RX_GET_ADDR_DESTA_FL3L4(location), 0U);
 }
 
@@ -2067,10 +2133,8 @@ hw_atl_rpfl3l4_cmd_set(struct aq_hw_s *aq_hw, uint8_t location, uint32_t cmd)
 	aq_hw_write_reg(aq_hw, HW_ATL_RX_GET_ADDR_CTRL_FL3L4(location), cmd);
 }
 
-void
-hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
-    uint32_t *ipv6_src)
-{
+void hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
+				      const uint32_t *ipv6_src) {
 	int i;
 
 	for (i = 0; i < 4; ++i)
@@ -2078,10 +2142,8 @@ hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
 		    HW_ATL_RX_GET_ADDR_SRCA_FL3L4(location + i), ipv6_src[i]);
 }
 
-void
-hw_atl_rpfl3l4_ipv6_dest_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
-    uint32_t *ipv6_dest)
-{
+void hw_atl_rpfl3l4_ipv6_dest_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
+				       const uint32_t *ipv6_dest) {
 	int i;
 
 	for (i = 0; i < 4; ++i)

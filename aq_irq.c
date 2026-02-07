@@ -51,15 +51,17 @@ __FBSDID("$FreeBSD$");
 #include "aq_device.h"
 #include "aq_ring.h"
 #include "aq_dbg.h"
+#include "aq_fw.h"
 #include "aq_hw.h"
 #include "aq_hw_llh.h"
 
 int
 aq_update_hw_stats(aq_dev_t *aq_dev)
 {
-	struct aq_hw *hw = &aq_dev->hw;
-	struct aq_hw_fw_mbox mbox;
-
+    struct aq_hw *hw = &aq_dev->hw;
+    struct aq_hw_fw_mbox mbox;
+    bool aq2_b0 = AQ_HW_IS_AQ2(hw) &&
+        hw->aq2_iface_ver == AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0;
 	aq_hw_mpi_read_stats(hw, &mbox);
 
 #define AQ_SDELTA(_N_) (aq_dev->curr_stats._N_ += \
@@ -76,24 +78,38 @@ aq_update_hw_stats(aq_dev_t *aq_dev)
 		AQ_SDELTA(bptc);
 		AQ_SDELTA(erpr);
 
-		AQ_SDELTA(ubrc);
-		AQ_SDELTA(ubtc);
-		AQ_SDELTA(mbrc);
-		AQ_SDELTA(mbtc);
-		AQ_SDELTA(bbrc);
-		AQ_SDELTA(bbtc);
+        if (aq2_b0) {
+            aq_dev->curr_stats.brc +=
+                mbox.stats.ubrc - aq_dev->last_stats.ubrc;
+            aq_dev->curr_stats.btc +=
+                mbox.stats.ubtc - aq_dev->last_stats.ubtc;
+            aq_dev->curr_stats.ubrc = 0;
+            aq_dev->curr_stats.mbrc = 0;
+            aq_dev->curr_stats.bbrc = 0;
+            aq_dev->curr_stats.ubtc = 0;
+            aq_dev->curr_stats.mbtc = 0;
+            aq_dev->curr_stats.bbtc = 0;
+        } else {
+            AQ_SDELTA(ubrc);
+            AQ_SDELTA(ubtc);
+            AQ_SDELTA(mbrc);
+            AQ_SDELTA(mbtc);
+            AQ_SDELTA(bbrc);
+            AQ_SDELTA(bbtc);
 
+            aq_dev->curr_stats.brc = aq_dev->curr_stats.ubrc +
+                                     aq_dev->curr_stats.mbrc +
+                                     aq_dev->curr_stats.bbrc;
+            aq_dev->curr_stats.btc = aq_dev->curr_stats.ubtc +
+                                     aq_dev->curr_stats.mbtc +
+                                     aq_dev->curr_stats.bbtc;
+        }
 		AQ_SDELTA(ptc);
 		AQ_SDELTA(prc);
 
 		AQ_SDELTA(dpc);
 
-		aq_dev->curr_stats.brc = aq_dev->curr_stats.ubrc +
-		    aq_dev->curr_stats.mbrc + aq_dev->curr_stats.bbrc;
-		aq_dev->curr_stats.btc = aq_dev->curr_stats.ubtc +
-		    aq_dev->curr_stats.mbtc + aq_dev->curr_stats.bbtc;
-
-	}
+    }
 #undef AQ_SDELTA
 
 	memcpy(&aq_dev->last_stats, &mbox.stats, sizeof(mbox.stats));

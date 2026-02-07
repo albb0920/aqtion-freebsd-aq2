@@ -320,4 +320,10 @@ struct aq_firmware_ops aq_fw1x_ops =
 
 	.get_mac_addr = fw1x_get_mac_addr,
 	.get_stats = fw1x_get_stats,
+	.led_control = NULL,
+	.get_phy_temp = NULL,
+	.get_cable_len = NULL,
+	.get_cable_diag = NULL,
+	.set_eee_rate = NULL,
+	.get_eee_rate = NULL,
 };

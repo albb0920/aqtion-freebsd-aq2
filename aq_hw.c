@@ -1,3 +1,23 @@
+/* $OpenBSD: if_aq_pci.c,v 1.34 2026/01/15 06:41:21 dlg Exp $ */
+/*	$NetBSD: if_aq.c,v 1.27 2021/06/16 00:21:18 riastradh Exp $	*/
+
+/*
+ * Copyright (c) 2021 Jonathan Matthew <jonathan@d14n.org>
+ * Copyright (c) 2021 Mike Larkin <mlarkin@openbsd.org>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
 /*
  * aQuantia Corporation Network Driver
  * Copyright (C) 2014-2017 aQuantia Corporation. All rights reserved
@@ -32,25 +52,139 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
+
+#include <sys/endian.h>
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/endian.h>
 #include <sys/socket.h>
+#include <sys/bitstring.h>
+#include <sys/types.h>
 #include <machine/cpu.h>
-#include <net/if.h>
 
+#include <net/if.h>
+#include <net/ethernet.h>
+#include <net/iflib.h>
+
+#include "aq_device.h"
+#include "aq_fw.h"
 #include "aq_hw.h"
 #include "aq_dbg.h"
 #include "aq_hw_llh.h"
-#include "aq_fw.h"
+#include "aq_common.h"
+#include "aq_hw_llh_internal.h"
 
 #define AQ_HW_FW_SM_RAM        0x2U
 #define AQ_CFG_FW_MIN_VER_EXPECTED 0x01050006U
+
+#define AQ2_HW_FPGA_VERSION_REG 0x00f4u
+#define AQ2_LAUNCHTIME_CTRL_REG 0x7a1cu
+#define  AQ2_LAUNCHTIME_CTRL_RATIO_MSK 0x0000ff00u
+#define  AQ2_LAUNCHTIME_CTRL_RATIO_SHIFT 8
+#define  AQ2_LAUNCHTIME_CTRL_RATIO_SPEED_QUARTER 4u
+#define  AQ2_LAUNCHTIME_CTRL_RATIO_SPEED_HALF 2u
+#define  AQ2_LAUNCHTIME_CTRL_RATIO_SPEED_FULL 1u
+
+#define AQ2_RPF_NEW_CTRL_REG 0x5104u
+#define  AQ2_RPF_NEW_CTRL_ENABLE (1u << 11)
+
+#define AQ2_RPF_REDIR2_REG 0x54c8u
+#define  AQ2_RPF_REDIR2_INDEX (1u << 12)
+#define  AQ2_RPF_REDIR2_HASHTYPE_MSK 0x000001ffu
+#define  AQ2_RPF_REDIR2_HASHTYPE_ALL 0x000001ffu
+
+#define AQ2_RPF_REC_TAB_ENABLE_REG 0x6ff0u
+#define  AQ2_RPF_REC_TAB_ENABLE_MSK 0x0000ffffu
+
+#define AQ2_RPF_L2BC_TAG_REG 0x50f0u
+#define  AQ2_RPF_L2BC_TAG_MSK 0x0000003fu
+#define AQ2_RPF_L2UC_MSW_REG(i) (0x5114u + (i) * 8u)
+
+#define AQ2_ART_SEM_REG 0x03acu
+#define AQ2_RPF_ACT_ART_REQ_TAG_REG(i)    (0x14000u + (i) * 0x10u)
+#define AQ2_RPF_ACT_ART_REQ_MASK_REG(i)   (0x14004u + (i) * 0x10u)
+#define AQ2_RPF_ACT_ART_REQ_ACTION_REG(i) (0x14008u + (i) * 0x10u)
+
+#define AQ2_ART_ACTION_ACT_SHIFT 8
+#define AQ2_ART_ACTION_RSS 0x0080u
+#define AQ2_ART_ACTION_INDEX_SHIFT 2
+#define AQ2_ART_ACTION_ENABLE 0x0001u
+#define AQ2_ART_ACTION(act, rss, idx, en) \
+	(((act) << AQ2_ART_ACTION_ACT_SHIFT) | \
+	((rss) ? AQ2_ART_ACTION_RSS : 0u) | \
+	((idx) << AQ2_ART_ACTION_INDEX_SHIFT) | \
+	((en) ? AQ2_ART_ACTION_ENABLE : 0u))
+#define AQ2_ART_ACTION_DROP AQ2_ART_ACTION(0, 0, 0, 1)
+#define AQ2_ART_ACTION_DISABLE AQ2_ART_ACTION(0, 0, 0, 0)
+#define AQ2_ART_ACTION_ASSIGN_TC(tc) AQ2_ART_ACTION(1, 1, (tc), 1)
+#define AQ2_ART_ACTION_ASSIGN_QUEUE(q) AQ2_ART_ACTION(1, 0, (q), 1)
+
+#define AQ2_RPF_TAG_PCP_MASK 0xe0000000u
+#define AQ2_RPF_TAG_PCP_SHIFT 29
+#define AQ2_RPF_TAG_UNTAG_MASK 0x00004000u
+#define AQ2_RPF_TAG_VLAN_MASK 0x00003c00u
+#define AQ2_RPF_TAG_VLAN_SHIFT 10
+#define AQ2_RPF_TAG_ALLMC_MASK 0x00000040u
+#define AQ2_RPF_TAG_UC_MASK 0x0000002fu
+
+#define AQ2_RPF_INDEX_L2_PROMISC_OFF 0
+#define AQ2_RPF_INDEX_VLAN_PROMISC_OFF 1
+#define AQ2_RPF_INDEX_VLAN_USER 40
+#define AQ2_RPF_INDEX_PCP_TO_TC 56
+
+#define AQ2_RX_Q_TC_MAP_REG(i) (0x5900u + (i) * 4u)
+#define AQ2_TX_Q_TC_MAP_REG(i) (0x799cu + (i) * 4u)
+
+#define AQ2_RPF_RSS_REDIR_MAX 64u
+#define AQ2_RPF_RSS_REDIR_REG(tc, i) \
+	(0x6200u + (0x100u * ((tc) >> 2)) + (i) * 4u)
+#define AQ2_RPF_RSS_REDIR_TC_MSK(tc) (0x1fu << (5u * ((tc) & 3u)))
+
+#define AQ2_TPS_DATA_TCT_CREDIT_MAX_MSK 0xffff0000u
+#define AQ2_TPS_DATA_TCT_WEIGHT_MSK 0x00007fffu
+
+#define AQ2_RPF_L2UC_MSW_TAG_MSK 0x03c00000u
+
+#define AQ2_RPF_VL_TAG_REG(filter) (0x5290u + (filter) * 4u)
+#define AQ2_RPF_VL_TAG_MSK 0x0000f000u
+#define AQ2_RPF_VL_TAG_SHIFT 12
+
+#define AQ2_TX_INTR_MODERATION_CTL_REG(i) (0x7c28u + (i) * 0x40u)
+#define AQ2_TX_INTR_MODERATION_CTL_EN (1u << 1)
 
 
 int
 aq_hw_err_from_flags(struct aq_hw *hw)
 {
+	return (0);
+}
+
+static int aq2_filter_art_set(struct aq_hw *hw, uint32_t idx, uint32_t tag, uint32_t mask,
+	uint32_t action)
+{
+	int timo;
+	uint32_t sem;
+
+	if (!AQ_HW_IS_AQ2(hw))
+	    return (0);
+
+	for (timo = 1000; timo > 0; --timo) {
+	    sem = AQ_READ_REG(hw, AQ2_ART_SEM_REG);
+	    if (sem == 1U)
+	        break;
+	    usec_delay(10);
+	}
+
+	if (timo == 0)
+	    return (-ETIMEDOUT);
+
+	idx += hw->art_base_index;
+	AQ_WRITE_REG(hw, AQ2_RPF_ACT_ART_REQ_TAG_REG(idx), tag);
+	AQ_WRITE_REG(hw, AQ2_RPF_ACT_ART_REQ_MASK_REG(idx), mask);
+	AQ_WRITE_REG(hw, AQ2_RPF_ACT_ART_REQ_ACTION_REG(idx), action);
+	AQ_WRITE_REG(hw, AQ2_ART_SEM_REG, 1U);
+
 	return (0);
 }
 
@@ -117,9 +251,45 @@ err_exit:
 	return (err);
 }
 
+int aq_hw_fw_upload_dwords(struct aq_hw *hw, uint32_t a, const uint32_t *p, uint32_t cnt)
+{
+	int err = 0;
+
+	AQ_HW_WAIT_FOR(reg_glb_cpu_sem_get(hw,
+	                   AQ_HW_FW_SM_RAM) == 1U,
+	                   1U, 10000U);
+
+	if (err < 0) {
+	    bool is_locked;
+
+	    reg_glb_cpu_sem_set(hw, 1U, AQ_HW_FW_SM_RAM);
+	    is_locked = reg_glb_cpu_sem_get(hw, AQ_HW_FW_SM_RAM);
+	    if (!is_locked) {
+	        err = -ETIME;
+	        goto err_exit;
+	    }
+	}
+
+	mif_mcp_up_mailbox_addr_set(hw, a);
+
+	for (++cnt; --cnt && !err;) {
+	    mif_mcp_up_mailbox_data_set(hw, *(p++));
+	    mif_mcp_up_mailbox_execute_operation_set(hw, 1);
+
+	    if (IS_CHIP_FEATURE(hw, REVISION_B1))
+	        AQ_HW_WAIT_FOR(a != mif_mcp_up_mailbox_addr_get(hw), 1U, 1000U);
+	    else
+	        AQ_HW_WAIT_FOR(!mif_mcp_up_mailbox_busy_get(hw), 1, 1000U);
+	}
+
+	reg_glb_cpu_sem_set(hw, 1U, AQ_HW_FW_SM_RAM);
+
+err_exit:
+	return (err);
+}
+
 int
-aq_hw_ver_match(const aq_hw_fw_version* ver_expected,
-    const aq_hw_fw_version* ver_actual)
+aq_hw_ver_match(const aq_hw_fw_version* ver_expected, const aq_hw_fw_version* ver_actual)
 {
 	AQ_DBG_ENTER();
 
@@ -139,8 +309,16 @@ aq_hw_init_ucp(struct aq_hw *hw)
 	int err = 0;
 	AQ_DBG_ENTER();
 
-	hw->fw_version.raw = 0;
+	if (AQ_HW_IS_AQ2(hw)) {
+	    err = aq2_fw_reboot(hw);
+	    if (err != EOK) {
+	        aq_log_error("aq_hw_init_ucp(): A2 F/W reboot failed, err %d", err);
+	        return (err);
+	    }
+	    return (EOK);
+	}
 
+	hw->fw_version.raw = 0;
 	err = aq_fw_reset(hw);
 	if (err != EOK) {
 		aq_log_error("aq_hw_init_ucp(): F/W reset failed, err %d", err);
@@ -170,7 +348,15 @@ aq_hw_init_ucp(struct aq_hw *hw)
 
 	/* check 10 times by 1ms */
 	AQ_HW_WAIT_FOR((hw->mbox_addr = AQ_READ_REG(hw, 0x360)) != 0, 400U, 20);
-
+	if (hw->fw_version.major_version >= 2)
+	    AQ_HW_WAIT_FOR((hw->rpc_addr = AQ_READ_REG(hw, AQ_HW_MPI_RPC_ADDR)) != 0,
+	        400U, 20);
+	else
+	    hw->rpc_addr = 0;
+	if (hw->fw_version.major_version >= 2)
+	    fw2x_read_settings_addr(hw);
+	else
+	    hw->settings_addr = 0;
 	aq_hw_fw_version ver_expected = { .raw = AQ_CFG_FW_MIN_VER_EXPECTED };
 	if (!aq_hw_ver_match(&ver_expected, &hw->fw_version))
 	        aq_log_error("atlantic: aq_hw_init_ucp(), wrong FW version: expected:%x actual:%x",
@@ -283,6 +469,9 @@ aq_hw_get_link_state(struct aq_hw *hw, uint32_t *link_speed, struct aq_hw_fc_inf
 	case aq_fw_100M:
 		*link_speed = 100U;
 		break;
+	case aq_fw_10M:
+		*link_speed = 10U;
+		break;
 	default:
 		*link_speed = 0U;
 		break;
@@ -290,7 +479,6 @@ aq_hw_get_link_state(struct aq_hw *hw, uint32_t *link_speed, struct aq_hw_fc_inf
 
 	fc_neg->fc_rx = !!(fc & aq_fw_fc_ENABLE_RX);
 	fc_neg->fc_tx = !!(fc & aq_fw_fc_ENABLE_TX);
-
  //   AQ_DBG_EXIT(0);
 	return (0);
 }
@@ -350,11 +538,56 @@ int
 aq_hw_set_power(struct aq_hw *hw, unsigned int power_state)
 {
 	AQ_DBG_ENTER();
-	aq_hw_mpi_set(hw, MPI_POWER, 0);
+	if (AQ_HW_IS_AQ2(hw)) {
+	    if (hw->wol_flags != 0)
+	        aq2_fw_set_wol(hw, hw->wol_flags, hw->mac_addr);
+	    else
+	        aq_hw_mpi_set(hw, MPI_DEINIT, 0);
+	} else {
+	    if (hw->wol_flags != 0 && hw->fw_ops == &aq_fw2x_ops)
+	        fw2x_set_wol(hw, hw->wol_flags, hw->mac_addr);
+	    else
+	        aq_hw_mpi_set(hw, MPI_POWER, 0);
+	}
 	AQ_DBG_EXIT(0);
 	return (0);
 }
 
+int aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c)
+{
+	if (hw->fw_ops && hw->fw_ops->get_phy_temp)
+	    return hw->fw_ops->get_phy_temp(hw, temp_c);
+	return (-ENOTSUP);
+}
+
+int aq_hw_get_cable_len(struct aq_hw *hw, uint8_t *len)
+{
+	if (hw->fw_ops && hw->fw_ops->get_cable_len)
+	    return hw->fw_ops->get_cable_len(hw, len);
+	return (-ENOTSUP);
+}
+
+int aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4])
+{
+	if (hw->fw_ops && hw->fw_ops->get_cable_diag)
+	    return hw->fw_ops->get_cable_diag(hw, lane_data);
+	return (-ENOTSUP);
+}
+
+int aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
+{
+	if (hw->fw_ops && hw->fw_ops->set_eee_rate)
+	    return hw->fw_ops->set_eee_rate(hw, rate);
+	return (-ENOTSUP);
+}
+
+int aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
+	uint32_t *lp_rate)
+{
+	if (hw->fw_ops && hw->fw_ops->get_eee_rate)
+	    return hw->fw_ops->get_eee_rate(hw, rate, supported, lp_rate);
+	return (-ENOTSUP);
+}
 
 /* HW NIC functions */
 
@@ -365,10 +598,15 @@ aq_hw_reset(struct aq_hw *hw)
 
 	AQ_DBG_ENTER();
 
-	err = aq_fw_reset(hw);
-	if (err < 0)
-		goto err_exit;
-
+	if (AQ_HW_IS_AQ2(hw)) {
+	    err = aq2_fw_reboot(hw);
+	    if (err < 0)
+	        goto err_exit;
+	} else {
+	    err = aq_fw_reset(hw);
+	    if (err < 0)
+	        goto err_exit;
+	}
 	itr_irq_reg_res_dis_set(hw, 0);
 	itr_res_irq_set(hw, 1);
 
@@ -409,14 +647,20 @@ aq_hw_qos_set(struct aq_hw *hw)
 	tps_tx_pkt_shed_desc_tc_arb_mode_set(hw, 0U);
 	tps_tx_pkt_shed_data_arb_mode_set(hw, 0U);
 
-	tps_tx_pkt_shed_tc_data_max_credit_set(hw, 0xFFF, 0U);
-	tps_tx_pkt_shed_tc_data_weight_set(hw, 0x64, 0U);
+	if (AQ_HW_IS_AQ2(hw)) {
+	    AQ_WRITE_REG_BIT(hw, tps_data_tctcredit_max_adr(0U),
+	        AQ2_TPS_DATA_TCT_CREDIT_MAX_MSK, 16, 0xfff0U);
+	    AQ_WRITE_REG_BIT(hw, tps_data_tctweight_adr(0U),
+	        AQ2_TPS_DATA_TCT_WEIGHT_MSK, 0, 0x640U);
+	} else {
+	    tps_tx_pkt_shed_tc_data_max_credit_set(hw, 0xFFF, 0U);
+	    tps_tx_pkt_shed_tc_data_weight_set(hw, 0x64, 0U);
+	}
 	tps_tx_pkt_shed_desc_tc_max_credit_set(hw, 0x50, 0U);
 	tps_tx_pkt_shed_desc_tc_weight_set(hw, 0x1E, 0U);
 
 	/* Tx buf size */
-	buff_size = AQ_HW_TXBUF_MAX;
-
+	buff_size = AQ_HW_IS_AQ2(hw) ? AQ2_HW_TXBUF_MAX : AQ_HW_TXBUF_MAX;
 	tpb_tx_pkt_buff_size_per_tc_set(hw, buff_size, tc);
 	tpb_tx_buff_hi_threshold_per_tc_set(hw,
 	    (buff_size * (1024 / 32U) * 66U) / 100U, tc);
@@ -425,8 +669,7 @@ aq_hw_qos_set(struct aq_hw *hw)
 
 	/* QoS Rx buf size per TC */
 	tc = 0;
-	buff_size = AQ_HW_RXBUF_MAX;
-
+	buff_size = AQ_HW_IS_AQ2(hw) ? AQ2_HW_RXBUF_MAX : AQ_HW_RXBUF_MAX;
 	rpb_rx_pkt_buff_size_per_tc_set(hw, buff_size, tc);
 	rpb_rx_buff_hi_threshold_per_tc_set(hw,
 	    (buff_size * (1024U / 32U) * 66U) / 100U, tc);
@@ -436,6 +679,24 @@ aq_hw_qos_set(struct aq_hw *hw)
 	/* QoS 802.1p priority -> TC mapping */
 	for (i_priority = 8U; i_priority--;)
 	rpf_rpb_user_priority_tc_map_set(hw, i_priority, 0U);
+
+	if (AQ_HW_IS_AQ2(hw)) {
+	    AQ_WRITE_REG_BIT(hw, 0x00007900U, 0x00000200U, 9, 1U);
+
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(0), 0x00000000U);
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(1), 0x00000000U);
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(2), 0x01010101U);
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(3), 0x01010101U);
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(4), 0x02020202U);
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(5), 0x02020202U);
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(6), 0x03030303U);
+	    AQ_WRITE_REG(hw, AQ2_TX_Q_TC_MAP_REG(7), 0x03030303U);
+
+	    AQ_WRITE_REG(hw, AQ2_RX_Q_TC_MAP_REG(0), 0x00000000U);
+	    AQ_WRITE_REG(hw, AQ2_RX_Q_TC_MAP_REG(1), 0x11111111U);
+	    AQ_WRITE_REG(hw, AQ2_RX_Q_TC_MAP_REG(2), 0x22222222U);
+	    AQ_WRITE_REG(hw, AQ2_RX_Q_TC_MAP_REG(3), 0x33333333U);
+	}
 
 	err = aq_hw_err_from_flags(hw);
 	AQ_DBG_EXIT(err);
@@ -528,7 +789,8 @@ aq_hw_init_tx_path(struct aq_hw *hw)
 	tdm_tx_dca_mode_set(hw, 0U);
 
 	tpb_tx_path_scp_ins_en_set(hw, 1U);
-
+	if (AQ_HW_IS_AQ2(hw))
+	    AQ_WRITE_REG_BIT(hw, 0x00007900U, 0x00000020U, 5, 0U);
 	err = aq_hw_err_from_flags(hw);
 	AQ_DBG_EXIT(err);
 	return (err);
@@ -550,14 +812,29 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 	rpb_rx_flow_ctl_mode_set(hw, 1U);
 
 	/* RSS Ring selection */
-	reg_rx_flr_rss_control1set(hw, 0xB3333333U);
-
-	/* Multicast filters */
-	for (i = AQ_HW_MAC_MAX; i--;) {
-		rpfl2_uc_flr_en_set(hw, (i == 0U) ? 1U : 0U, i);
-		rpfl2unicast_flr_act_set(hw, 1U, i);
+	if (AQ_HW_IS_AQ2(hw)) {
+	    struct aq_dev *softc = (struct aq_dev *)hw->aq_dev;
+	    if (softc && softc->rx_rings_count > 1)
+	        reg_rx_flr_rss_control1set(hw, 0xB3333333U);
+	    else
+	        reg_rx_flr_rss_control1set(hw, 0U);
+	} else {
+	    reg_rx_flr_rss_control1set(hw, 0xB3333333U);
 	}
 
+	if (AQ_HW_IS_AQ2(hw)) {
+	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_REDIR2_REG,
+	        AQ2_RPF_REDIR2_HASHTYPE_MSK, 0, AQ2_RPF_REDIR2_HASHTYPE_ALL);
+	}
+
+	/* Multicast filters */
+	{
+	    uint32_t mac_max = AQ_HW_IS_AQ2(hw) ? AQ2_HW_MAC_MAX : AQ_HW_MAC_MAX;
+	    for (i = mac_max; i--;) {
+	    rpfl2_uc_flr_en_set(hw, (i == 0U) ? 1U : 0U, i);
+	    rpfl2unicast_flr_act_set(hw, 1U, i);
+	    }
+	}
 	reg_rx_flr_mcst_flr_msk_set(hw, 0x00000000U);
 	reg_rx_flr_mcst_flr_set(hw, 0x00010FFFU, 0U);
 
@@ -569,23 +846,47 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 
 	rpf_vlan_prom_mode_en_set(hw, 1);
 
-	/* Rx Interrupts */
-	rdm_rx_desc_wr_wb_irq_en_set(hw, 1U);
-
 	/* misc */
-	control_reg_val = 0x000F0000U; //RPF2
+	if (!AQ_HW_IS_AQ2(hw)) {
+	    control_reg_val = 0x000F0000U; //RPF2
 
-	/* RSS hash type set for IP/TCP */
-	control_reg_val |= 0x1EU;
+	    /* RSS hash type set for IP/TCP */
+	    control_reg_val |= 0x1EU;
 
-	AQ_WRITE_REG(hw, 0x00005040U, control_reg_val);
+	    AQ_WRITE_REG(hw, 0x00005040U, control_reg_val);
+	}
 
 	rpfl2broadcast_en_set(hw, 1U);
 	rpfl2broadcast_flr_act_set(hw, 1U);
 	rpfl2broadcast_count_threshold_set(hw, 0xFFFFU & (~0U / 256U));
 
-	rdm_rx_dca_en_set(hw, 0U);
-	rdm_rx_dca_mode_set(hw, 0U);
+	if (AQ_HW_IS_AQ2(hw)) {
+	    struct aq_dev *softc = (struct aq_dev *)hw->aq_dev;
+	    uint32_t qcnt = 1U;
+
+	    if (softc && softc->rx_rings_count > 0)
+	        qcnt = softc->rx_rings_count;
+
+	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_REC_TAB_ENABLE_REG,
+	        AQ2_RPF_REC_TAB_ENABLE_MSK, 0, 0xffffU);
+	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_L2UC_MSW_REG(0),
+	        AQ2_RPF_L2UC_MSW_TAG_MSK, 22, 1U);
+	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_L2BC_TAG_REG,
+	        AQ2_RPF_L2BC_TAG_MSK, 0, 1U);
+
+	    aq2_filter_art_set(hw, AQ2_RPF_INDEX_L2_PROMISC_OFF, 0,
+	        AQ2_RPF_TAG_UC_MASK | AQ2_RPF_TAG_ALLMC_MASK,
+	        AQ2_ART_ACTION_DROP);
+	    aq2_filter_art_set(hw, AQ2_RPF_INDEX_VLAN_PROMISC_OFF, 0,
+	        AQ2_RPF_TAG_VLAN_MASK | AQ2_RPF_TAG_UNTAG_MASK,
+	        AQ2_ART_ACTION_DROP);
+
+	    for (i = 0; i < 8; i++) {
+	        aq2_filter_art_set(hw, AQ2_RPF_INDEX_PCP_TO_TC + i,
+	            (i << AQ2_RPF_TAG_PCP_SHIFT), AQ2_RPF_TAG_PCP_MASK,
+	            AQ2_ART_ACTION_ASSIGN_TC(i % qcnt));
+	    }
+	}
 
 	err = aq_hw_err_from_flags(hw);
 	AQ_DBG_EXIT(err);
@@ -611,8 +912,10 @@ aq_hw_mac_addr_set(struct aq_hw *hw, uint8_t *mac_addr, uint8_t index)
 	rpfl2_uc_flr_en_set(hw, 0U, index);
 	rpfl2unicast_dest_addresslsw_set(hw, l, index);
 	rpfl2unicast_dest_addressmsw_set(hw, h, index);
+	if (AQ_HW_IS_AQ2(hw))
+	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_L2UC_MSW_REG(index),
+	        AQ2_RPF_L2UC_MSW_TAG_MSK, 22, 1U);
 	rpfl2_uc_flr_en_set(hw, 1U, index);
-
 	err = aq_hw_err_from_flags(hw);
 
 err_exit:
@@ -629,16 +932,31 @@ aq_hw_init(struct aq_hw *hw, uint8_t *mac_addr, uint8_t adm_irq, bool msix)
 
 	AQ_DBG_ENTER();
 
-	/* Force limit MRRS on RDM/TDM to 2K */
-	val = AQ_READ_REG(hw, AQ_HW_PCI_REG_CONTROL_6_ADR);
-	AQ_WRITE_REG(hw, AQ_HW_PCI_REG_CONTROL_6_ADR, (val & ~0x707) | 0x404);
+	if (!AQ_HW_IS_AQ2(hw)) {
+	    /* Force limit MRRS on RDM/TDM to 2K */
+	    val = AQ_READ_REG(hw, AQ_HW_PCI_REG_CONTROL_6_ADR);
+	    AQ_WRITE_REG(hw, AQ_HW_PCI_REG_CONTROL_6_ADR, (val & ~0x707) | 0x404);
 
-	/* TX DMA total request limit. B0 hardware is not capable to
-	* handle more than (8K-MRRS) incoming DMA data.
-	* Value 24 in 256byte units
-	*/
-	AQ_WRITE_REG(hw, AQ_HW_TX_DMA_TOTAL_REQ_LIMIT_ADR, 24);
+	    /* TX DMA total request limit. B0 hardware is not capable to
+	    * handle more than (8K-MRRS) incoming DMA data.
+	    * Value 24 in 256byte units
+	    */
+	    AQ_WRITE_REG(hw, AQ_HW_TX_DMA_TOTAL_REQ_LIMIT_ADR, 24);
+	} else {
+	    uint32_t fpgaver = AQ_READ_REG(hw, AQ2_HW_FPGA_VERSION_REG);
+	    uint32_t ratio;
 
+	    if (fpgaver < 0x01000000U)
+	        ratio = AQ2_LAUNCHTIME_CTRL_RATIO_SPEED_FULL;
+	    else if (fpgaver >= 0x01008502U)
+	        ratio = AQ2_LAUNCHTIME_CTRL_RATIO_SPEED_HALF;
+	    else
+	        ratio = AQ2_LAUNCHTIME_CTRL_RATIO_SPEED_QUARTER;
+
+	    AQ_WRITE_REG_BIT(hw, AQ2_LAUNCHTIME_CTRL_REG,
+	        AQ2_LAUNCHTIME_CTRL_RATIO_MSK, AQ2_LAUNCHTIME_CTRL_RATIO_SHIFT,
+	        ratio);
+	}
 	aq_hw_init_tx_path(hw);
 	aq_hw_init_rx_path(hw);
 
@@ -648,10 +966,14 @@ aq_hw_init(struct aq_hw *hw, uint8_t *mac_addr, uint8_t adm_irq, bool msix)
 
 	aq_hw_qos_set(hw);
 
+	if (AQ_HW_IS_AQ2(hw)) {
+	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_NEW_CTRL_REG,
+	        AQ2_RPF_NEW_CTRL_ENABLE, 11, 1U);
+	}
+
 	err = aq_hw_err_from_flags(hw);
 	if (err < 0)
-		goto err_exit;
-
+	    goto err_exit;
 	/* Interrupts */
 	//Enable interrupt
 	itr_irq_status_cor_en_set(hw, 0); //Disable clear-on-read for status
@@ -729,11 +1051,8 @@ aq_hw_interrupt_moderation_set(struct aq_hw *hw)
 		if (custom_itr > 0x1FF)
 			custom_itr = 0x1FF;
 
-		itr_rx |= (custom_itr/2) << 0x8U; /* set min timer value */
-		itr_rx |= custom_itr << 0x10U; /* set max timer value */
-
-		itr_tx |= (custom_itr/2) << 0x8U; /* set min timer value */
-		itr_tx |= custom_itr << 0x10U; /* set max timer value */
+	    itr_tx |= (custom_itr/2) << 0x8U; /* set min timer value */
+	    itr_tx |= custom_itr << 0x10U; /* set max timer value */
 	}
 
 	tdm_tx_desc_wr_wb_irq_en_set(hw, !active);
@@ -742,8 +1061,13 @@ aq_hw_interrupt_moderation_set(struct aq_hw *hw)
 	rdm_rdm_intr_moder_en_set(hw, active);
 
 	for (int i = HW_ATL_B0_RINGS_MAX; i--;) {
-		reg_tx_intr_moder_ctrl_set(hw,  itr_tx, i);
-		reg_rx_intr_moder_ctrl_set(hw,  itr_rx, i);
+	    if (AQ_HW_IS_AQ2(hw)) {
+	        AQ_WRITE_REG(hw, AQ2_TX_INTR_MODERATION_CTL_REG(i),
+	            itr_tx | AQ2_TX_INTR_MODERATION_CTL_EN);
+	    } else {
+	        reg_tx_intr_moder_ctrl_set(hw, itr_tx, i);
+	    }
+	    reg_rx_intr_moder_ctrl_set(hw, itr_rx, i);
 	}
 
 	err = aq_hw_err_from_flags(hw);
@@ -794,17 +1118,227 @@ hw_atl_b0_hw_vlan_promisc_set(struct aq_hw_s *self, bool promisc)
 	return aq_hw_err_from_flags(self);
 }
 
+static void aq2_rpf_vlan_tag_set(struct aq_hw_s *self, uint32_t tag, uint32_t filter)
+{
+	AQ_WRITE_REG_BIT(self, AQ2_RPF_VL_TAG_REG(filter),
+	    AQ2_RPF_VL_TAG_MSK, AQ2_RPF_VL_TAG_SHIFT, tag);
+}
+
+int aq2_hw_vlan_ctrl(struct aq_hw_s *self, bool enable)
+{
+	uint32_t action = enable ? AQ2_ART_ACTION_DROP : AQ2_ART_ACTION_DISABLE;
+
+	hw_atl_rpf_vlan_prom_mode_en_set(self, !enable);
+
+	aq2_filter_art_set(self, AQ2_RPF_INDEX_VLAN_PROMISC_OFF, 0,
+	    AQ2_RPF_TAG_VLAN_MASK | AQ2_RPF_TAG_UNTAG_MASK, action);
+
+	return aq_hw_err_from_flags(self);
+}
+
+int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)
+{
+	uint32_t action;
+	uint32_t index;
+	uint32_t i;
+
+	hw_atl_rpf_vlan_prom_mode_en_set(self, 1U);
+
+	for (i = 0; i < AQ_HW_VLAN_MAX_FILTERS; i++) {
+		hw_atl_rpf_vlan_flr_en_set(self, 0U, i);
+		hw_atl_rpf_vlan_rxq_en_flr_set(self, 0U, i);
+		index = AQ2_RPF_INDEX_VLAN_USER + i;
+		aq2_filter_art_set(self, index, 0, 0, AQ2_ART_ACTION_DISABLE);
+
+		if (!aq_vlans[i].enable)
+			continue;
+
+		hw_atl_rpf_vlan_id_flr_set(self, aq_vlans[i].vlan_id, i);
+		hw_atl_rpf_vlan_flr_act_set(self, 1U, i);
+		hw_atl_rpf_vlan_flr_en_set(self, 1U, i);
+
+		if (aq_vlans[i].queue != 0xFF) {
+			hw_atl_rpf_vlan_rxq_flr_set(self,
+			    aq_vlans[i].queue, i);
+			hw_atl_rpf_vlan_rxq_en_flr_set(self, 1U, i);
+
+			aq2_rpf_vlan_tag_set(self, i + 2, i);
+
+			action = AQ2_ART_ACTION_ASSIGN_QUEUE(aq_vlans[i].queue);
+			index = AQ2_RPF_INDEX_VLAN_USER + i;
+			aq2_filter_art_set(self, index,
+			    (i + 2) << AQ2_RPF_TAG_VLAN_SHIFT,
+			    AQ2_RPF_TAG_VLAN_MASK, action);
+		} else {
+			aq2_rpf_vlan_tag_set(self, 1, i);
+		}
+	}
+
+	return aq_hw_err_from_flags(self);
+}
+
+static void aq_hw_l2_route_set(struct aq_hw *hw,
+	const struct aq_rx_filter_l2 *data, bool enabled)
+{
+	uint32_t route_enable = 0U;
+
+	if (enabled && data->queue >= 0)
+		route_enable = 1U;
+
+	hw_atl_rpf_etht_flr_act_set(hw, route_enable, data->location);
+	hw_atl_rpf_etht_rx_queue_en_set(hw, route_enable, data->location);
+	if (route_enable != 0U)
+		hw_atl_rpf_etht_rx_queue_set(hw, data->queue, data->location);
+}
+
+static void aq_hw_l2_filter_write(struct aq_hw *hw,
+	const struct aq_rx_filter_l2 *data, bool enabled)
+{
+	uint32_t filter_enable = enabled ? 1U : 0U;
+	uint32_t ethertype = enabled ? data->ethertype : 0U;
+	uint32_t prio_enable = (enabled && data->user_priority_en) ? 1U : 0U;
+
+	hw_atl_rpf_etht_flr_en_set(hw, filter_enable, data->location);
+	hw_atl_rpf_etht_flr_set(hw, ethertype, data->location);
+	hw_atl_rpf_etht_user_priority_en_set(hw, prio_enable, data->location);
+	if (prio_enable != 0U)
+		hw_atl_rpf_etht_user_priority_set(hw, data->user_priority,
+		    data->location);
+	aq_hw_l2_route_set(hw, data, enabled);
+}
+
+int aq_hw_filter_l2_set(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
+{
+	if (AQ_HW_IS_AQ2(hw))
+		return (-ENOTSUP);
+
+	aq_hw_l2_filter_write(hw, data, true);
+	return aq_hw_err_from_flags(hw);
+}
+
+int aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
+{
+	if (AQ_HW_IS_AQ2(hw))
+		return (-ENOTSUP);
+
+	aq_hw_l2_filter_write(hw, data, false);
+	return aq_hw_err_from_flags(hw);
+}
+
+static void aq_hw_l3l4_slot_clear(struct aq_hw *hw, uint8_t location)
+{
+	hw_atl_rpfl3l4_cmd_clear(hw, location);
+	hw_atl_rpf_l4_spd_set(hw, 0U, location);
+	hw_atl_rpf_l4_dpd_set(hw, 0U, location);
+}
+
+static void aq_hw_l3l4_rule_clear(struct aq_hw *hw,
+	const struct aq_rx_filter_l3l4 *data)
+{
+	uint8_t location = data->location;
+	int i;
+
+	if (!data->is_ipv6) {
+		aq_hw_l3l4_slot_clear(hw, location);
+		hw_atl_rpfl3l4_ipv4_src_addr_clear(hw, location);
+		hw_atl_rpfl3l4_ipv4_dest_addr_clear(hw, location);
+		return;
+	}
+
+	for (i = 0; i < HW_ATL_RX_CNT_REG_ADDR_IPV6; ++i)
+		aq_hw_l3l4_slot_clear(hw, (uint8_t)(location + i));
+	hw_atl_rpfl3l4_ipv6_src_addr_clear(hw, location);
+	hw_atl_rpfl3l4_ipv6_dest_addr_clear(hw, location);
+}
+
+static void aq_hw_l3l4_addr_set(struct aq_hw *hw,
+	const struct aq_rx_filter_l3l4 *data)
+{
+	uint8_t location = data->location;
+	uint32_t addr_cmp = HW_ATL_RX_ENABLE_CMP_DEST_ADDR_L3 |
+	    HW_ATL_RX_ENABLE_CMP_SRC_ADDR_L3;
+
+	if ((data->cmd & addr_cmp) == 0U)
+		return;
+
+	if (data->is_ipv6) {
+		hw_atl_rpfl3l4_ipv6_dest_addr_set(hw, location, data->ip_dst);
+		hw_atl_rpfl3l4_ipv6_src_addr_set(hw, location, data->ip_src);
+		return;
+	}
+
+	hw_atl_rpfl3l4_ipv4_dest_addr_set(hw, location, data->ip_dst[0]);
+	hw_atl_rpfl3l4_ipv4_src_addr_set(hw, location, data->ip_src[0]);
+}
+
+static void aq_hw_l3l4_ports_set(struct aq_hw *hw,
+	const struct aq_rx_filter_l3l4 *data)
+{
+	uint8_t location = data->location;
+	uint32_t port_cmp = HW_ATL_RX_ENABLE_CMP_DEST_PORT_L4 |
+	    HW_ATL_RX_ENABLE_CMP_SRC_PORT_L4;
+
+	if ((data->cmd & port_cmp) == 0U)
+		return;
+
+	hw_atl_rpf_l4_dpd_set(hw, data->p_dst, location);
+	hw_atl_rpf_l4_spd_set(hw, data->p_src, location);
+}
+
+int aq_hw_filter_l3l4_clear(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
+{
+	if (AQ_HW_IS_AQ2(hw))
+		return (-ENOTSUP);
+
+	aq_hw_l3l4_rule_clear(hw, data);
+	return aq_hw_err_from_flags(hw);
+}
+
+int aq_hw_filter_l3l4_set(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
+{
+	int err;
+
+	if (AQ_HW_IS_AQ2(hw))
+		return (-ENOTSUP);
+
+	aq_hw_l3l4_rule_clear(hw, data);
+	err = aq_hw_err_from_flags(hw);
+	if (err != 0)
+		return (err);
+
+	aq_hw_l3l4_addr_set(hw, data);
+	aq_hw_l3l4_ports_set(hw, data);
+	hw_atl_rpfl3l4_cmd_set(hw, data->location, data->cmd);
+
+	return aq_hw_err_from_flags(hw);
+}
+
 
 void
 aq_hw_set_promisc(struct aq_hw_s *self, bool l2_promisc, bool vlan_promisc,
-    bool mc_promisc)
+	bool mc_promisc)
 {
 	AQ_DBG_ENTERA("promisc %d, vlan_promisc %d, allmulti %d", l2_promisc,
 	    vlan_promisc, mc_promisc);
 
+	if (AQ_HW_IS_AQ2(self)) {
+		uint32_t action = l2_promisc ? AQ2_ART_ACTION_DISABLE :
+		    AQ2_ART_ACTION_DROP;
+
+		aq2_filter_art_set(self, AQ2_RPF_INDEX_L2_PROMISC_OFF, 0,
+		    AQ2_RPF_TAG_UC_MASK | AQ2_RPF_TAG_ALLMC_MASK, action);
+		action = vlan_promisc ? AQ2_ART_ACTION_DISABLE :
+		    AQ2_ART_ACTION_DROP;
+		aq2_filter_art_set(self, AQ2_RPF_INDEX_VLAN_PROMISC_OFF, 0,
+		    AQ2_RPF_TAG_VLAN_MASK | AQ2_RPF_TAG_UNTAG_MASK, action);
+
+		aq2_hw_vlan_ctrl(self, !vlan_promisc);
+	}
+
 	rpfl2promiscuous_mode_en_set(self, l2_promisc);
 
-	hw_atl_b0_hw_vlan_promisc_set(self, l2_promisc | vlan_promisc);
+	if (!AQ_HW_IS_AQ2(self))
+		hw_atl_b0_hw_vlan_promisc_set(self, l2_promisc | vlan_promisc);
 
 	rpfl2_accept_all_mc_packets_set(self, mc_promisc);
 	rpfl2multicast_flr_en_set(self, mc_promisc, 0);
@@ -814,7 +1348,7 @@ aq_hw_set_promisc(struct aq_hw_s *self, bool l2_promisc, bool vlan_promisc,
 
 int
 aq_hw_rss_hash_set(struct aq_hw_s *self,
-    uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE])
+	uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE])
 {
 	uint32_t rss_key_dw[HW_ATL_RSS_HASHKEY_SIZE / 4];
 	uint32_t addr = 0U;
@@ -845,7 +1379,7 @@ err_exit:
 
 int
 aq_hw_rss_hash_get(struct aq_hw_s *self,
-    uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE])
+	uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE])
 {
 	uint32_t rss_key_dw[HW_ATL_RSS_HASHKEY_SIZE / 4];
 	uint32_t addr = 0U;
@@ -868,12 +1402,36 @@ aq_hw_rss_hash_get(struct aq_hw_s *self,
 
 int
 aq_hw_rss_set(struct aq_hw_s *self,
-    uint8_t rss_table[HW_ATL_RSS_INDIRECTION_TABLE_MAX])
+	uint8_t rss_table[HW_ATL_RSS_INDIRECTION_TABLE_MAX])
 {
 	uint16_t bitary[(HW_ATL_RSS_INDIRECTION_TABLE_MAX *
 					3 / 16U)];
 	int err = 0;
 	uint32_t i = 0U;
+
+	if (AQ_HW_IS_AQ2(self)) {
+		struct aq_dev *softc = (struct aq_dev *)self->aq_dev;
+		uint32_t qcnt = 1U;
+		uint32_t tc;
+
+		if (softc && softc->rx_rings_count > 0)
+			qcnt = softc->rx_rings_count;
+
+		AQ_WRITE_REG_BIT(self, AQ2_RPF_REDIR2_REG,
+		    AQ2_RPF_REDIR2_INDEX, 12, 0U);
+		for (i = 0; i < AQ2_RPF_RSS_REDIR_MAX; i++) {
+			for (tc = 0; tc < 4; tc++) {
+				uint32_t q = (tc * 8U) + (i % qcnt);
+				uint32_t shift = 5U * (tc & 3U);
+
+				AQ_WRITE_REG_BIT(self,
+				    AQ2_RPF_RSS_REDIR_REG(tc, i),
+				    AQ2_RPF_RSS_REDIR_TC_MSK(tc), shift, q);
+			}
+		}
+
+		return (0);
+	}
 
 	memset(bitary, 0, sizeof(bitary));
 
@@ -902,8 +1460,11 @@ int
 aq_hw_udp_rss_enable(struct aq_hw_s *self, bool enable)
 {
 	int err = 0;
-	if (!enable) {
-		/* HW bug workaround:
+
+	if (AQ_HW_IS_AQ2(self))
+		return (0);
+
+	if (!enable) {		/* HW bug workaround:
 		 * Disable RSS for UDP using rx flow filter 0.
 		 * HW does not track RSS stream for fragmenged UDP,
 		 * 0x5040 control reg does not work.
