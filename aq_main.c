@@ -541,7 +541,7 @@ static int aq_if_attach_post(if_ctx_t ctx)
 	/* RSS */
 	arc4rand(softc->rss_key, HW_ATL_RSS_HASHKEY_SIZE, 0);
 	for (int i = ARRAY_SIZE(softc->rss_table); i--;){
-		softc->rss_table[i] = i & (softc->rx_rings_count - 1);
+		softc->rss_table[i] = (u8)(i % softc->rx_rings_count);
 	}
 exit:
 	AQ_DBG_EXIT(rc);
