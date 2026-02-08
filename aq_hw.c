@@ -153,6 +153,16 @@ __FBSDID("$FreeBSD$");
 #define AQ2_TX_INTR_MODERATION_CTL_REG(i) (0x7c28u + (i) * 0x40u)
 #define AQ2_TX_INTR_MODERATION_CTL_EN (1u << 1)
 
+/*
+ * Deterministic PCP (0..7) -> TC mapping for AQ2.
+ * For now we keep a fixed 4-TC policy:
+ *   PCP 0,1 -> TC0
+ *   PCP 2,3 -> TC1
+ *   PCP 4,5 -> TC2
+ *   PCP 6,7 -> TC3
+ */
+static const uint8_t aq2_pcp_to_tc_map[8] = { 0, 0, 1, 1, 2, 2, 3, 3 };
+
 
 int
 aq_hw_err_from_flags(struct aq_hw *hw)
@@ -861,12 +871,6 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 	rpfl2broadcast_count_threshold_set(hw, 0xFFFFU & (~0U / 256U));
 
 	if (AQ_HW_IS_AQ2(hw)) {
-	    struct aq_dev *softc = (struct aq_dev *)hw->aq_dev;
-	    uint32_t qcnt = 1U;
-
-	    if (softc && softc->rx_rings_count > 0)
-	        qcnt = softc->rx_rings_count;
-
 	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_REC_TAB_ENABLE_REG,
 	        AQ2_RPF_REC_TAB_ENABLE_MSK, 0, 0xffffU);
 	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_L2UC_MSW_REG(0),
@@ -884,7 +888,7 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 	    for (i = 0; i < 8; i++) {
 	        aq2_filter_art_set(hw, AQ2_RPF_INDEX_PCP_TO_TC + i,
 	            (i << AQ2_RPF_TAG_PCP_SHIFT), AQ2_RPF_TAG_PCP_MASK,
-	            AQ2_ART_ACTION_ASSIGN_TC(i % qcnt));
+	            AQ2_ART_ACTION_ASSIGN_TC(aq2_pcp_to_tc_map[i]));
 	    }
 	}
 
