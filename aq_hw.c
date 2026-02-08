@@ -997,12 +997,21 @@ int aq_hw_init(struct aq_hw *hw, u8 *mac_addr, u8 adm_irq, bool msix)
     //Enable interrupt
     itr_irq_status_cor_en_set(hw, 0); //Disable clear-on-read for status
     itr_irq_auto_mask_clr_en_set(hw, 1); // Enable auto-mask clear.
-	if (msix)
-		itr_irq_mode_set(hw, 0x6); //MSIX + multi vector
-	else
-		itr_irq_mode_set(hw, 0x5); //MSI + multi vector
+    if (AQ_HW_IS_AQ2(hw)) {
+        /* see aq_hw_atl2_igcr_table_ in linux driver */
+        reg_irq_glb_ctl_set(hw, msix ? 0x20000026U : 0x20000025U);
+        itr_irq_auto_masklsw_set(hw, 0xFFFFFFFFU);
 
-    reg_gen_irq_map_set(hw, 0x80 | adm_irq, 3);
+        reg_gen_irq_map_set(hw, ((8U << 0x18) | (1U << 0x1F)) |
+                                ((8U << 0x10) | (1U << 0x17)), 0);
+    } else {
+        if (msix)
+                itr_irq_mode_set(hw, 0x6); //MSIX + multi vector
+        else
+                itr_irq_mode_set(hw, 0x5); //MSI + multi vector
+
+        reg_gen_irq_map_set(hw, 0x80 | adm_irq, 3);
+    }
 
     aq_hw_offload_set(hw);
 
