@@ -1182,7 +1182,7 @@ aq_update_vlan_filters(struct aq_dev *softc)
 	memset(aq_vlans, 0, sizeof(aq_vlans));
 
 	if (AQ_HW_IS_AQ2(hw))
-		aq2_hw_vlan_ctrl(hw, false);
+		aq2_hw_vlan_promisc_set(hw, true);
 	else
 		hw_atl_b0_hw_vlan_promisc_set(hw, true);
 
@@ -1232,7 +1232,7 @@ aq_update_vlan_filters(struct aq_dev *softc)
 
 	if (AQ_HW_IS_AQ2(hw)) {
 		aq2_hw_vlan_set(hw, aq_vlans);
-		aq2_hw_vlan_ctrl(hw, !aq_is_vlan_promisc_required(softc));
+		aq2_hw_vlan_promisc_set(hw, aq_is_vlan_promisc_required(softc));
 	} else {
 		hw_atl_b0_hw_vlan_set(hw, aq_vlans);
 		hw_atl_b0_hw_vlan_promisc_set(hw, aq_is_vlan_promisc_required(softc));

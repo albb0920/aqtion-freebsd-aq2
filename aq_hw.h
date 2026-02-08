@@ -384,7 +384,8 @@ int hw_atl_b0_hw_vlan_promisc_set(struct aq_hw_s *self, bool promisc);
 int hw_atl_b0_hw_vlan_set(struct aq_hw_s *self,
                   struct aq_rx_filter_vlan *aq_vlans);
 int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans);
-int aq2_hw_vlan_ctrl(struct aq_hw_s *self, bool enable);
+int aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc);
+
 int aq_hw_rss_hash_set(struct aq_hw_s *self, uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE]);
 int aq_hw_rss_hash_get(struct aq_hw_s *self, uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE]);
 int aq_hw_rss_set(struct aq_hw_s *self, uint8_t rss_table[HW_ATL_RSS_INDIRECTION_TABLE_MAX]);

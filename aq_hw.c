@@ -1138,11 +1138,16 @@ static void aq2_rpf_vlan_tag_set(struct aq_hw_s *self, uint32_t tag, uint32_t fi
 	    AQ2_RPF_VL_TAG_MSK, AQ2_RPF_VL_TAG_SHIFT, tag);
 }
 
-int aq2_hw_vlan_ctrl(struct aq_hw_s *self, bool enable)
+int aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc)
 {
-	uint32_t action = enable ? AQ2_ART_ACTION_DROP : AQ2_ART_ACTION_DISABLE;
+	bool l2_promisc = AQ_READ_REG_BIT(self, rpfl2promis_mode_adr,
+	    rpfl2promis_mode_msk, rpfl2promis_mode_shift) != 0U;
+	uint32_t action;
 
-	hw_atl_rpf_vlan_prom_mode_en_set(self, !enable);
+	hw_atl_rpf_vlan_prom_mode_en_set(self, vlan_promisc);
+
+	/* ART filter cannot be enabled for promisc modes */
+	action = (vlan_promisc || l2_promisc) ? AQ2_ART_ACTION_DISABLE : AQ2_ART_ACTION_DROP;
 
 	aq2_filter_art_set(self, AQ2_RPF_INDEX_VLAN_PROMISC_OFF, 0,
 	    AQ2_RPF_TAG_VLAN_MASK | AQ2_RPF_TAG_UNTAG_MASK, action);
@@ -1335,24 +1340,19 @@ aq_hw_set_promisc(struct aq_hw_s *self, bool l2_promisc, bool vlan_promisc,
 	AQ_DBG_ENTERA("promisc %d, vlan_promisc %d, allmulti %d", l2_promisc,
 	    vlan_promisc, mc_promisc);
 
+	rpfl2promiscuous_mode_en_set(self, l2_promisc);
+
 	if (AQ_HW_IS_AQ2(self)) {
 		uint32_t action = l2_promisc ? AQ2_ART_ACTION_DISABLE :
 		    AQ2_ART_ACTION_DROP;
 
 		aq2_filter_art_set(self, AQ2_RPF_INDEX_L2_PROMISC_OFF, 0,
 		    AQ2_RPF_TAG_UC_MASK | AQ2_RPF_TAG_ALLMC_MASK, action);
-		action = vlan_promisc ? AQ2_ART_ACTION_DISABLE :
-		    AQ2_ART_ACTION_DROP;
-		aq2_filter_art_set(self, AQ2_RPF_INDEX_VLAN_PROMISC_OFF, 0,
-		    AQ2_RPF_TAG_VLAN_MASK | AQ2_RPF_TAG_UNTAG_MASK, action);
 
-		aq2_hw_vlan_ctrl(self, !vlan_promisc);
-	}
-
-	rpfl2promiscuous_mode_en_set(self, l2_promisc);
-
-	if (!AQ_HW_IS_AQ2(self))
+		aq2_hw_vlan_promisc_set(self, vlan_promisc);
+	} else {
 		hw_atl_b0_hw_vlan_promisc_set(self, l2_promisc | vlan_promisc);
+	}
 
 	rpfl2_accept_all_mc_packets_set(self, mc_promisc);
 	rpfl2multicast_flr_en_set(self, mc_promisc, 0);
