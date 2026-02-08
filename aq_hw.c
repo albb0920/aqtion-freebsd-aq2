@@ -136,6 +136,8 @@ __FBSDID("$FreeBSD$");
 #define AQ2_RX_Q_TC_MAP_REG(i) (0x5900u + (i) * 4u)
 #define AQ2_TX_Q_TC_MAP_REG(i) (0x799cu + (i) * 4u)
 
+#define AQ2_HW_NUM_TCS 4u
+
 #define AQ2_RPF_RSS_REDIR_MAX 64u
 #define AQ2_RPF_RSS_REDIR_REG(tc, i) \
 	(0x6200u + (0x100u * ((tc) >> 2)) + (i) * 4u)
@@ -1434,8 +1436,8 @@ aq_hw_rss_set(struct aq_hw_s *self,
 		AQ_WRITE_REG_BIT(self, AQ2_RPF_REDIR2_REG,
 		    AQ2_RPF_REDIR2_INDEX, 12, 0U);
 		for (i = 0; i < AQ2_RPF_RSS_REDIR_MAX; i++) {
-			for (tc = 0; tc < 4; tc++) {
-				uint32_t q = (tc * 8U) + (i % qcnt);
+			for (tc = 0; tc < AQ2_HW_NUM_TCS; tc++) {
+				uint32_t q = rss_table[i] % qcnt;
 				uint32_t shift = 5U * (tc & 3U);
 
 				AQ_WRITE_REG_BIT(self,
