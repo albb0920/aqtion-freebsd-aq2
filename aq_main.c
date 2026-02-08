@@ -509,6 +509,8 @@ fail:
 static int aq_if_attach_post(if_ctx_t ctx)
 {
 	struct aq_dev *softc;
+	struct ifmediareq ifmr;
+	int err;
 	int rc;
 
 	AQ_DBG_ENTER();
@@ -543,6 +545,17 @@ static int aq_if_attach_post(if_ctx_t ctx)
 	for (int i = ARRAY_SIZE(softc->rss_table); i--;){
 		softc->rss_table[i] = (u8)(i % softc->rx_rings_count);
 	}
+
+	/*
+	 * Start link negotiation already in attach path so carrier can be
+	 * discovered without requiring an ifconfig down/up cycle.
+	 */
+	err = aq_hw_set_link_speed(&softc->hw, softc->hw.link_rate);
+	if (err != EOK) {
+		device_printf(softc->dev, "atlantic: aq_hw_set_link_speed: %d",
+		    err);
+	}
+	aq_if_media_status(ctx, &ifmr);
 exit:
 	AQ_DBG_EXIT(rc);
 	return (rc);
