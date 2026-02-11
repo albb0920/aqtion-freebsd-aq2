@@ -180,6 +180,7 @@ static int aq_if_media_change(if_ctx_t ctx);
 static int aq_if_promisc_set(if_ctx_t ctx, int flags);
 static uint64_t aq_if_get_counter(if_ctx_t ctx, ift_counter cnt);
 static void aq_if_timer(if_ctx_t ctx, uint16_t qid);
+static bool aq_if_needs_restart(if_ctx_t ctx, enum iflib_restart_event event);
 static int aq_if_priv_ioctl(if_ctx_t ctx, u_long command, caddr_t data);
 static int aq_hw_capabilities(struct aq_dev *softc);
 static void aq_add_stats_sysctls(struct aq_dev *softc);
@@ -270,7 +271,8 @@ static device_method_t aq_if_methods[] = {
 	DEVMETHOD(ifdi_get_counter, aq_if_get_counter),
 	DEVMETHOD(ifdi_update_admin_status, aq_if_update_admin_status),
 	DEVMETHOD(ifdi_timer, aq_if_timer),
-//	DEVMETHOD(ifdi_priv_ioctl, aq_if_priv_ioctl),
+	DEVMETHOD(ifdi_needs_restart, aq_if_needs_restart),
+	//	DEVMETHOD(ifdi_priv_ioctl, aq_if_priv_ioctl),
 
 	/* Interrupt enable / disable */
 	DEVMETHOD(ifdi_intr_enable, aq_if_enable_intr),
@@ -1006,6 +1008,17 @@ static int aq_if_promisc_set(if_ctx_t ctx, int flags)
 
 	AQ_DBG_EXIT(0);
 	return (0);
+}
+
+static bool
+aq_if_needs_restart(if_ctx_t ctx __unused, enum iflib_restart_event event)
+{
+	switch (event) {
+	case IFLIB_RESTART_VLAN_CONFIG:
+		return (true);
+	default:
+		return (false);
+	}
 }
 
 static void aq_if_timer(if_ctx_t ctx, uint16_t qid)
