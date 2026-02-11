@@ -91,6 +91,8 @@ aq_ring_rx_init(struct aq_hw *hw, struct aq_ring *ring)
                      uint32_t interrupt_cause,
                      uint32_t cpu_idx) */
 {
+	if_t ifp = iflib_get_ifp(ring->dev->ctx);
+	uint32_t vlan_strip;
 	int err;
 	uint32_t dma_desc_addr_lsw = (uint32_t)ring->rx_descs_phys & 0xffffffff;
 	uint32_t dma_desc_addr_msw = (uint32_t)(ring->rx_descs_phys >> 32);
@@ -115,7 +117,8 @@ aq_ring_rx_init(struct aq_hw *hw, struct aq_ring *ring)
 
 	rdm_rx_desc_head_buff_size_set(hw, 0U, ring->index);
 	rdm_rx_desc_head_splitting_set(hw, 0U, ring->index);
-	rpo_rx_desc_vlan_stripping_set(hw, 0U, ring->index);
+	vlan_strip = !!(if_getcapenable(ifp) & IFCAP_VLAN_HWTAGGING);
+	rpo_rx_desc_vlan_stripping_set(hw, vlan_strip, ring->index);
 
 	/* Rx ring set mode */
 
@@ -377,7 +380,8 @@ aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 		ri->iri_frags[i].irf_idx = cidx;
 		ri->iri_frags[i].irf_len = len;
 
-		if ((rx_desc->wb.pkt_type & 0x60) != 0) {
+		if ((if_getcapenable(ifp) & IFCAP_VLAN_HWTAGGING) &&
+		    (rx_desc->wb.pkt_type & 0x60)) {
 			ri->iri_flags |= M_VLANTAG;
 			ri->iri_vtag = le32toh(rx_desc->wb.vlan);
 		}
