@@ -195,7 +195,9 @@ struct aq_hw {
 #define HW_ATL_B0_MAX_RXD 4096U /* in fact up to 8184, but closest to power of 2 */
 #define HW_ATL_B0_MAX_TXD 4096U /* in fact up to 8184, but closest to power of 2 */
 
-#define HW_ATL_B0_MTU_JUMBO  16352U
+#define HW_ATL_A0_MTU_JUMBO 9014U
+#define HW_ATL_B0_MTU_JUMBO 16352U
+#define HW_ATL2_MTU_JUMBO   16352U
 #define HW_ATL_B0_TSO_SIZE (160*1024)
 #define HW_ATL_B0_RINGS_MAX 32U
 #define HW_ATL_B0_LRO_RXD_MAX 16U
@@ -237,6 +239,17 @@ struct aq_hw {
 #define IS_CHIP_FEATURE(HW, _F_) (AQ_HW_CHIP_##_F_ & \
     (HW)->chip_features)
 #define AQ_HW_IS_AQ2(HW) (IS_CHIP_FEATURE((HW), ANTIGUA))
+
+static inline uint32_t
+aq_hw_mtu_jumbo(const struct aq_hw *hw)
+{
+	if (AQ_HW_IS_AQ2(hw))
+		return HW_ATL2_MTU_JUMBO;
+	if (IS_CHIP_FEATURE(hw, REVISION_A0))
+		return HW_ATL_A0_MTU_JUMBO;
+	return HW_ATL_B0_MTU_JUMBO;
+}
+
 #define AQ_HW_FW_VER_EXPECTED 0x01050006U
 
 #define AQ_WOL_MAGIC 0x00000001U

@@ -699,7 +699,7 @@ static int aq2_fw_reset(struct aq_hw *hw)
 	    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_ACTIVE);
 
 	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_MTU_REG,
-	    MCLBYTES + sizeof(struct ether_header));
+	    aq_hw_mtu_jumbo(hw));
 
 	v = AQ_READ_REG(hw, AQ2_FW_INTERFACE_IN_REQUEST_POLICY_REG);
 	v |= AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_QUEUE_OR_TC;
