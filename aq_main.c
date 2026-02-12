@@ -299,6 +299,8 @@ static driver_t aq_if_driver = {
 static struct if_shared_ctx aq_sctx_init = {
 	.isc_magic = IFLIB_MAGIC,
 	.isc_q_align = PAGE_SIZE,
+
+	/* Chip MTU-derived fields are updated in aq_if_attach_pre */
 	.isc_tx_maxsize = HW_ATL_B0_TSO_SIZE,
 	.isc_tx_maxsegsize = HW_ATL_B0_MTU_JUMBO,
 #if __FreeBSD__ >= 12
@@ -306,6 +308,7 @@ static struct if_shared_ctx aq_sctx_init = {
 	.isc_tso_maxsegsize = HW_ATL_B0_MTU_JUMBO,
 #endif
 	.isc_rx_maxsize = HW_ATL_B0_MTU_JUMBO,
+
 	.isc_rx_nsegments = 16,
 	.isc_rx_maxsegsize = PAGE_SIZE,
 	.isc_nfl = 1,
@@ -350,6 +353,7 @@ static int aq_if_attach_pre(if_ctx_t ctx)
 	struct aq_dev *softc;
 	struct aq_hw *hw;
 	if_softc_ctx_t scctx;
+	u32 mtu_jumbo;
 	int rc;
 
 	AQ_DBG_ENTER();
@@ -442,6 +446,12 @@ static int aq_if_attach_pre(if_ctx_t ctx)
 		AQ_DBG_ERROR("Unable to get mac addr from hw");
 		goto fail;
 	};
+	mtu_jumbo = aq_hw_mtu_jumbo(hw);
+	aq_sctx_init.isc_tx_maxsegsize = mtu_jumbo;
+#if __FreeBSD__ >= 12
+	aq_sctx_init.isc_tso_maxsegsize = mtu_jumbo;
+#endif
+	aq_sctx_init.isc_rx_maxsize = mtu_jumbo;
 
 	softc->admin_ticks = 0;
 
@@ -480,7 +490,7 @@ static int aq_if_attach_pre(if_ctx_t ctx)
 	scctx->isc_tx_nsegments = 31,
 	scctx->isc_tx_tso_segments_max = 31;
 	scctx->isc_tx_tso_size_max = HW_ATL_B0_TSO_SIZE - sizeof(struct ether_vlan_header);
-	scctx->isc_tx_tso_segsize_max = HW_ATL_B0_MTU_JUMBO;
+	scctx->isc_tx_tso_segsize_max = mtu_jumbo;
 	scctx->isc_min_frame_size = 52;
 	scctx->isc_txrx = &aq_txrx;
 
@@ -952,7 +962,12 @@ static void aq_if_multi_set(if_ctx_t ctx)
 static int aq_if_mtu_set(if_ctx_t ctx, uint32_t mtu)
 {
 	int err = 0;
+	struct aq_dev *softc = iflib_get_softc(ctx);
+
 	AQ_DBG_ENTER();
+
+	if (mtu < ETHERMIN || mtu > (aq_hw_mtu_jumbo(&softc->hw) - ETHER_HDR_LEN - ETHER_CRC_LEN))
+		err = EINVAL;
 
 	AQ_DBG_EXIT(err);
 	return (err);
