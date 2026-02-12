@@ -375,6 +375,9 @@ aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 		} else {
 			total_len = le32toh(rx_desc->wb.pkt_len);
 			len = total_len & (ring->rx_max_frame_size - 1);
+
+			if (__predict_false(len == 0))
+				len = ring->rx_max_frame_size;
 		}
 		ri->iri_frags[i].irf_flid = 0;
 		ri->iri_frags[i].irf_idx = cidx;
