@@ -284,10 +284,12 @@ static int aq_isc_rxd_available(void *arg, uint16_t rxqid, qidx_t idx, qidx_t bu
 		} else {
 			/* LRO/Jumbo: wait for whole packet be in the ring */
 			if (rx_desc[i].wb.rsc_cnt) {
+				/* LRO packet */
 				i = rx_desc[i].wb.next_desp;
 				iter++;
 				continue;
 			} else {
+				/* Jumbo packet */
 				iter++;
 				i = aq_next(i, ring->rx_size - 1);
 				continue;
@@ -390,6 +392,11 @@ static int aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 
 	ring->stats.rx_bytes += total_len;
 	ring->stats.rx_pkts++;
+
+	/* Track LRO packets */
+	if (i > 1 && rx_desc->wb.rsc_cnt > 0) {
+		ring->stats.lro_pkts++;
+	}
 
 exit:
 	AQ_DBG_EXIT(rc);

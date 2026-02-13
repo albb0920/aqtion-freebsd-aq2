@@ -773,13 +773,17 @@ static int aq_hw_offload_set(struct aq_hw *hw)
 
         rpo_lro_total_desc_lim_set(hw, 2U);
 
-        rpo_lro_patch_optimization_en_set(hw, 0U);
+        rpo_lro_patch_optimization_en_set(hw, 1U);
 
         rpo_lro_min_pay_of_first_pkt_set(hw, 10U);
 
         rpo_lro_pkt_lim_set(hw, 1U);
 
         rpo_lro_en_set(hw, (hw->lro_enabled ? 0xFFFFFFFFU : 0U));
+
+        itr_rsc_en_set(hw, (hw->lro_enabled ? 0xFFFFFFFFU : 0U));
+
+        itr_rsc_delay_set(hw, 1U);
     }
 
 

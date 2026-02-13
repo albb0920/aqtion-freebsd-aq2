@@ -47,6 +47,33 @@ You can also set a combined mask (magic|phy):
 sysctl dev.aq.0.wol_mask=3
 ```
 
+## Large Receive Offload (LRO)
+
+LRO is disabled by default because it is incompatible with routing, forwarding,
+and bridging. To enable LRO, add to `/boot/loader.conf`:
+
+```
+hw.aq.enable_lro=1
+```
+
+Then reboot. LRO will be automatically enabled on the interface.
+
+To disable LRO at runtime:
+
+```
+ifconfig aq0 -lro
+```
+
+**WARNING**: Only enable LRO on interfaces used as **endpoints** (workstations,
+servers receiving traffic). Do NOT enable LRO if the interface is used for:
+- Routing or forwarding (routers, firewalls)
+- Bridging (network bridges)
+- Jails (host interface with jails)
+- VMs (host interface with bhyve/VirtualBox/etc.)
+
+Enabling LRO in these scenarios will cause **packet corruption** and **severe
+performance degradation**.
+
 ## FW2x controls
 
 These are only available on FW2x devices:

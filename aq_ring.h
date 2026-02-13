@@ -133,6 +133,7 @@ struct aq_ring_stats {
 	u64 rx_pkts;
 	u64 rx_bytes;
 	u64 jumbo_pkts;
+	u64 lro_pkts;
 	u64 rx_err;
 	u64 irq;
 

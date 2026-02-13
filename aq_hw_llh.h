@@ -821,6 +821,14 @@ void rpo_lro_inactive_interval_set(struct aq_hw *aq_hw,
 void rpo_lro_max_coalescing_interval_set(struct aq_hw *aq_hw,
                      u32 lro_max_coalescing_interval);
 
+/* itr */
+
+/* set itr rsc enable */
+void itr_rsc_en_set(struct aq_hw *aq_hw, u32 enable);
+
+/* set itr rsc delay */
+void itr_rsc_delay_set(struct aq_hw *aq_hw, u32 delay);
+
 /* rx */
 
 /* set rx register reset disable */

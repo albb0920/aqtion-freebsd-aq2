@@ -145,6 +145,14 @@
 #define itr_res_msk 0x80000000
 /* lower bit position of bitfield itr_reset */
 #define itr_res_shift 31
+/* register address for bitfield itr_rsc_en */
+#define itr_rsc_en_adr 0x00002200
+/* register address for bitfield itr_rsc_delay[3:0] */
+#define itr_rsc_delay_adr 0x00002204
+/* bitmask for bitfield itr_rsc_delay[3:0] */
+#define itr_rsc_delay_msk 0x0000000f
+/* lower bit position of bitfield itr_rsc_delay[3:0] */
+#define itr_rsc_delay_shift 0
 /* register address for bitfield dca{d}_cpuid[7:0] */
 #define rdm_dcadcpuid_adr(dca) (0x00006100 + (dca) * 0x4)
 /* bitmask for bitfield dca{d}_cpuid[7:0] */

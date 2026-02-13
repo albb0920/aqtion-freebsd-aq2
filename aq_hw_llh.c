@@ -1458,6 +1458,20 @@ void rpo_lro_max_coalescing_interval_set(struct aq_hw *aq_hw,
                 lro_max_coalescing_interval);
 }
 
+/* itr */
+void itr_rsc_en_set(struct aq_hw *aq_hw, u32 enable)
+{
+    AQ_WRITE_REG(aq_hw, itr_rsc_en_adr, enable);
+}
+
+void itr_rsc_delay_set(struct aq_hw *aq_hw, u32 delay)
+{
+    AQ_WRITE_REG_BIT(aq_hw, itr_rsc_delay_adr,
+                itr_rsc_delay_msk,
+                itr_rsc_delay_shift,
+                delay);
+}
+
 /* rx */
 void rx_rx_reg_res_dis_set(struct aq_hw *aq_hw, u32 rx_reg_res_dis)
 {

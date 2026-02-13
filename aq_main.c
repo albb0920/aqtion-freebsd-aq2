@@ -339,6 +339,11 @@ static int aq_enable_rss_udp = 1;
 SYSCTL_INT(_hw_aq, OID_AUTO, enable_rss_udp, CTLFLAG_RDTUN, &aq_enable_rss_udp, 0,
     "Enable Receive-Side Scaling (RSS) for UDP");
 
+/* Large Receive Offload - disabled by default due to routing/bridging incompatibility */
+static int aq_enable_lro = 0;
+SYSCTL_INT(_hw_aq, OID_AUTO, enable_lro, CTLFLAG_RDTUN, &aq_enable_lro, 0,
+    "Enable Large Receive Offload (LRO) - incompatible with routing/forwarding/bridging");
+
 
 /*
  * Device Methods
@@ -466,6 +471,9 @@ static int aq_if_attach_pre(if_ctx_t ctx)
 							  IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER |
 							  IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING |
 							  IFCAP_VLAN_HWCSUM;
+	/* LRO is opt-in due to incompatibility with routing/forwarding/bridging */
+	if (aq_enable_lro)
+		scctx->isc_capabilities |= IFCAP_LRO;
 #ifdef IFCAP_WOL_MAGIC
 	scctx->isc_capabilities |= IFCAP_WOL_MAGIC;
 #elif defined(IFCAP_WOL)
@@ -480,6 +488,9 @@ static int aq_if_attach_pre(if_ctx_t ctx)
 	    IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER |
 	    IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING |
 	    IFCAP_VLAN_HWCSUM;
+	/* LRO is opt-in due to incompatibility with routing/forwarding/bridging */
+	if (aq_enable_lro)
+		cap |= IFCAP_LRO;
 #ifdef IFCAP_WOL_MAGIC
 	cap |= IFCAP_WOL_MAGIC;
 #elif defined(IFCAP_WOL)
@@ -651,7 +662,18 @@ static int aq_if_suspend(if_ctx_t ctx)
 
 static int aq_if_resume(if_ctx_t ctx)
 {
+	struct aq_dev *softc;
+	struct aq_hw *hw;
+	if_t ifp;
+
 	AQ_DBG_ENTER();
+
+	softc = iflib_get_softc(ctx);
+	hw = &softc->hw;
+	ifp = iflib_get_ifp(ctx);
+
+	/* Update LRO enabled state before init */
+	hw->lro_enabled = (if_getcapenable(ifp) & IFCAP_LRO) != 0;
 
 	aq_if_init(ctx);
 
@@ -779,11 +801,16 @@ static void aq_if_init(if_ctx_t ctx)
 	struct aq_dev *softc;
 	struct aq_hw *hw;
 	struct ifmediareq ifmr;
+	if_t ifp;
 	int i, err;
 
 	AQ_DBG_ENTER();
 	softc = iflib_get_softc(ctx);
 	hw = &softc->hw;
+	ifp = iflib_get_ifp(ctx);
+
+	/* Set LRO enabled based on interface capabilities */
+	hw->lro_enabled = (if_getcapenable(ifp) & IFCAP_LRO) != 0;
 
 	err = aq_hw_init(&softc->hw, softc->hw.mac_addr, softc->msix,
 					softc->scctx->isc_intr == IFLIB_INTR_MSIX);
