@@ -393,6 +393,7 @@ aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 		cidx = aq_next(cidx, ring->rx_size - 1);
 	} while (!rx_desc->wb.eop);
 
+	/* iflib couples RXCSUM and RXCSUM_IPV6 when both advertised */
 	if ((if_getcapenable(ifp) & IFCAP_RXCSUM) != 0) {
 		aq_rx_set_cso_flags(rx_desc, ri);
 	}
