@@ -829,7 +829,6 @@ static void aq_if_init(if_ctx_t ctx)
 	aq_hw_rss_hash_set(&softc->hw, softc->rss_key);
 	aq_hw_rss_set(&softc->hw, softc->rss_table);
 	aq_hw_udp_rss_enable(hw, aq_enable_rss_udp);
-	aq_hw_set_link_speed(hw, hw->link_rate);
 	aq_hw_set_eee_rate(hw, hw->eee_rate);
 	if (hw->fw_ops == &aq_fw2x_ops) {
 		if (softc->downshift)
