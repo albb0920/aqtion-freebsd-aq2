@@ -374,7 +374,8 @@ int aq_hw_mpi_create(struct aq_hw *hw);
 
 int aq_hw_mpi_read_stats(struct aq_hw *hw, struct aq_hw_fw_mbox *pmbox);
 
-int aq_hw_init(struct aq_hw *hw, u8 *mac_addr, u8 adm_irq, bool msix);
+int aq_hw_init(struct aq_hw *hw, u8 *mac_addr, u8 adm_irq, bool msix,
+	int capenable);
 
 int aq_hw_start(struct aq_hw *hw);
 

@@ -728,7 +728,8 @@ static int aq_hw_qos_set(struct aq_hw *hw)
     return (err);
 }
 
-static int aq_hw_offload_set(struct aq_hw *hw)
+static int aq_hw_offload_set(struct aq_hw *hw, bool rx_ip_csum_enable,
+    bool rx_l4_csum_enable)
 {
     int err = 0;
 
@@ -740,8 +741,8 @@ static int aq_hw_offload_set(struct aq_hw *hw)
         goto err_exit;
 
     /* RX checksums offloads*/
-    rpo_ipv4header_crc_offload_en_set(hw, 1);
-    rpo_tcp_udp_crc_offload_en_set(hw, 1);
+    rpo_ipv4header_crc_offload_en_set(hw, rx_ip_csum_enable);
+    rpo_tcp_udp_crc_offload_en_set(hw, rx_l4_csum_enable);
     if (err < 0)
         goto err_exit;
 
@@ -947,10 +948,13 @@ err_exit:
     return (err);
 }
 
-int aq_hw_init(struct aq_hw *hw, u8 *mac_addr, u8 adm_irq, bool msix)
+int aq_hw_init(struct aq_hw *hw, u8 *mac_addr, u8 adm_irq, bool msix,
+    int capenable)
 {
 
     int err = 0;
+    bool rx_ip_csum_enable;
+    bool rx_l4_csum_enable;
     u32 val = 0;
 
     AQ_DBG_ENTER();
@@ -1019,7 +1023,10 @@ int aq_hw_init(struct aq_hw *hw, u8 *mac_addr, u8 adm_irq, bool msix)
         reg_gen_irq_map_set(hw, 0x80 | adm_irq, 3);
     }
 
-    aq_hw_offload_set(hw);
+    rx_ip_csum_enable = !!(capenable & IFCAP_RXCSUM);
+    rx_l4_csum_enable = !!(capenable &
+        (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6));
+    aq_hw_offload_set(hw, rx_ip_csum_enable, rx_l4_csum_enable);
 
 err_exit:
     AQ_DBG_EXIT(err);
