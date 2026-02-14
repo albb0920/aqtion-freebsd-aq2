@@ -471,9 +471,10 @@ aq_if_attach_pre(if_ctx_t ctx)
 	/* since FreeBSD13 deadlock due to calling iflib_led_func() under CTX_LOCK() */
 	iflib_led_create(ctx);
 #endif
-	scctx->isc_tx_csum_flags = CSUM_IP | CSUM_TCP | CSUM_UDP | CSUM_TSO;
+	scctx->isc_tx_csum_flags = CSUM_IP | CSUM_TCP | CSUM_UDP | CSUM_TSO |
+							   CSUM_IP6_TCP | CSUM_IP6_UDP | CSUM_IP6_TSO;
 #if __FreeBSD__ >= 12
-	scctx->isc_capabilities = IFCAP_RXCSUM | IFCAP_TXCSUM | IFCAP_HWCSUM | IFCAP_TSO |
+	scctx->isc_capabilities = IFCAP_HWCSUM | IFCAP_HWCSUM_IPV6 | IFCAP_TSO |
 							  IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER |
 							  IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING |
 							  IFCAP_VLAN_HWCSUM;
@@ -487,7 +488,7 @@ aq_if_attach_pre(if_ctx_t ctx)
 	if_t ifp;
 	int cap;
 	ifp = iflib_get_ifp(ctx);
-	cap = IFCAP_RXCSUM | IFCAP_TXCSUM | IFCAP_HWCSUM | IFCAP_TSO |
+	cap = IFCAP_HWCSUM | IFCAP_HWCSUM_IPV6 | IFCAP_TSO |
 	    IFCAP_JUMBO_MTU | IFCAP_VLAN_HWFILTER |
 	    IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING |
 	    IFCAP_VLAN_HWCSUM;
@@ -800,15 +801,18 @@ aq_if_init(if_ctx_t ctx)
 {
 	struct aq_dev *softc;
 	struct aq_hw *hw;
+	if_t ifp;
 	struct ifmediareq ifmr;
 	int i, err;
 
 	AQ_DBG_ENTER();
 	softc = iflib_get_softc(ctx);
 	hw = &softc->hw;
+	ifp = iflib_get_ifp(ctx);
 
 	err = aq_hw_init(&softc->hw, softc->hw.mac_addr, softc->msix,
-	    softc->scctx->isc_intr == IFLIB_INTR_MSIX);
+	    softc->scctx->isc_intr == IFLIB_INTR_MSIX,
+	    if_getcapenable(ifp));
 	if (err != EOK) {
 		device_printf(softc->dev, "atlantic: aq_hw_init: %d", err);
 	}
