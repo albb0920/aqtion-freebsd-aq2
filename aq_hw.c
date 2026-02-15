@@ -909,12 +909,13 @@ aq_hw_mac_addr_set(struct aq_hw *hw, uint8_t *mac_addr, uint8_t index)
 
 	AQ_DBG_ENTER();
 	if (!mac_addr) {
-		err = -EINVAL;
+		rpfl2_uc_flr_en_set(hw, 0U, index);
+		err = aq_hw_err_from_flags(hw);
 		goto err_exit;
 	}
 	h = (mac_addr[0] << 8) | (mac_addr[1]);
-	l = (mac_addr[2] << 24) | (mac_addr[3] << 16) | (mac_addr[4] << 8) |
-	    mac_addr[5];
+	l = (mac_addr[2] << 24) | (mac_addr[3] << 16) |
+	    (mac_addr[4] << 8) | mac_addr[5];
 
 	rpfl2_uc_flr_en_set(hw, 0U, index);
 	rpfl2unicast_dest_addresslsw_set(hw, l, index);
