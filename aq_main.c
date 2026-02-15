@@ -918,6 +918,11 @@ aq_if_get_counter(if_ctx_t ctx, ift_counter cnt)
 	}
 }
 
+static int aq_mc_slots(struct aq_hw *hw)
+{
+	return ((int)(aq_hw_mac_max(hw) - AQ_HW_MAC_MIN));
+}
+
 #if __FreeBSD_version >= 1300054
 static u_int
 aq_mc_filter_apply(void *arg, struct sockaddr_dl *dl, u_int count)
@@ -925,8 +930,8 @@ aq_mc_filter_apply(void *arg, struct sockaddr_dl *dl, u_int count)
 	struct aq_dev *softc = arg;
 	struct aq_hw *hw = &softc->hw;
 	uint8_t *mac_addr = NULL;
-	uint32_t mac_max = AQ_HW_IS_AQ2(hw) ? AQ2_HW_MAC_MAX : AQ_HW_MAC_MAX;
-	if (count == mac_max)
+
+	if ((int)count >= aq_mc_slots(hw))
 		return (0);
 
 	mac_addr = LLADDR(dl);
@@ -942,10 +947,9 @@ aq_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
 	struct aq_dev *softc = arg;
 	struct aq_hw *hw = &softc->hw;
 	uint8_t *mac_addr = NULL;
-	uint32_t mac_max = AQ_HW_IS_AQ2(hw) ? AQ2_HW_MAC_MAX : AQ_HW_MAC_MAX;
 	if (ifma->ifma_addr->sa_family != AF_LINK)
 		return (0);
-	if (count == mac_max)
+	if (count >= aq_mc_slots(hw))
 		return (0);
 
 	mac_addr = LLADDR((struct sockaddr_dl *)ifma->ifma_addr);
@@ -959,9 +963,7 @@ aq_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
 static bool
 aq_is_mc_promisc_required(struct aq_dev *softc)
 {
-	if (AQ_HW_IS_AQ2(&softc->hw))
-		return (softc->mcnt >= AQ2_HW_MAC_MAX);
-	return (softc->mcnt >= AQ_HW_MAC_MAX);
+	return (softc->mcnt > aq_mc_slots(&softc->hw));
 }
 
 static void
@@ -974,10 +976,8 @@ aq_if_multi_set(if_ctx_t ctx)
 #if __FreeBSD_version >= 1300054
 	softc->mcnt = if_llmaddr_count(iflib_get_ifp(ctx));
 #else
-	if (AQ_HW_IS_AQ2(hw))
-		softc->mcnt = if_multiaddr_count(iflib_get_ifp(ctx), AQ2_HW_MAC_MAX);
-	else
-		softc->mcnt = if_multiaddr_count(iflib_get_ifp(ctx), AQ_HW_MAC_MAX);
+	softc->mcnt = if_multiaddr_count(iflib_get_ifp(ctx),
+	    aq_mc_slots(hw) + 1);
 #endif
 	if (aq_is_mc_promisc_required(softc)) {
 		aq_hw_set_promisc(hw, !!(if_getflags(ifp) & IFF_PROMISC),

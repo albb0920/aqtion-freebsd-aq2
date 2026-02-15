@@ -842,7 +842,7 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 
 	/* Multicast filters */
 	{
-	    uint32_t mac_max = AQ_HW_IS_AQ2(hw) ? AQ2_HW_MAC_MAX : AQ_HW_MAC_MAX;
+	    uint32_t mac_max = aq_hw_mac_max(hw);
 	    for (i = mac_max; i--;) {
 	    rpfl2_uc_flr_en_set(hw, (i == 0U) ? 1U : 0U, i);
 	    rpfl2unicast_flr_act_set(hw, 1U, i);
