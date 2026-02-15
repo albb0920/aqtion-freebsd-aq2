@@ -976,6 +976,7 @@ aq_if_multi_set(if_ctx_t ctx)
 	struct aq_dev *softc = iflib_get_softc(ctx);
 	if_t ifp = iflib_get_ifp(ctx);
 	struct aq_hw  *hw = &softc->hw;
+	bool mc_promisc;
 	uint32_t mac_max = aq_hw_mac_max(hw);
 	uint32_t i;
 	AQ_DBG_ENTER();
@@ -986,10 +987,9 @@ aq_if_multi_set(if_ctx_t ctx)
 	    aq_mc_slots(hw) + 1);
 #endif
 	if (aq_is_mc_promisc_required(softc)) {
-		aq_hw_set_promisc(hw, !!(if_getflags(ifp) & IFF_PROMISC),
-		    aq_is_vlan_promisc_required(softc),
-		    !!(if_getflags(ifp) & IFF_ALLMULTI) || aq_is_mc_promisc_required(softc));
+		mc_promisc = true;
 	} else {
+		mc_promisc = !!(if_getflags(ifp) & IFF_ALLMULTI);
 #if __FreeBSD_version >= 1300054
 		if_foreach_llmaddr(iflib_get_ifp(ctx), &aq_mc_filter_apply, softc);
 #else
@@ -998,6 +998,8 @@ aq_if_multi_set(if_ctx_t ctx)
 		for (i = AQ_HW_MAC_MIN + softc->mcnt; i < mac_max; i++)
 			aq_hw_mac_addr_set(hw, NULL, (uint8_t)i);
 	}
+	aq_hw_set_promisc(hw, !!(if_getflags(ifp) & IFF_PROMISC),
+	    aq_is_vlan_promisc_required(softc), mc_promisc);
 	AQ_DBG_EXIT(0);
 }
 
