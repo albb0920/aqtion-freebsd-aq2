@@ -181,7 +181,6 @@ static int aq_if_promisc_set(if_ctx_t ctx, int flags);
 static uint64_t aq_if_get_counter(if_ctx_t ctx, ift_counter cnt);
 static void aq_if_timer(if_ctx_t ctx, uint16_t qid);
 static bool aq_if_needs_restart(if_ctx_t ctx, enum iflib_restart_event event);
-static int aq_if_priv_ioctl(if_ctx_t ctx, u_long command, caddr_t data);
 static int aq_hw_capabilities(struct aq_dev *softc);
 static void aq_add_stats_sysctls(struct aq_dev *softc);
 static int aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS);
@@ -213,7 +212,6 @@ static void aq_if_vlan_register(if_ctx_t ctx, uint16_t vtag);
 static void aq_if_vlan_unregister(if_ctx_t ctx, uint16_t vtag);
 
 /* Informational/diagnostic */
-static void	aq_if_debug(if_ctx_t ctx);
 static void	aq_if_led_func(if_ctx_t ctx, int onoff);
 
 static device_method_t aq_methods[] = {
@@ -272,7 +270,6 @@ static device_method_t aq_if_methods[] = {
 	DEVMETHOD(ifdi_update_admin_status, aq_if_update_admin_status),
 	DEVMETHOD(ifdi_timer, aq_if_timer),
 	DEVMETHOD(ifdi_needs_restart, aq_if_needs_restart),
-	//	DEVMETHOD(ifdi_priv_ioctl, aq_if_priv_ioctl),
 
 	/* Interrupt enable / disable */
 	DEVMETHOD(ifdi_intr_enable, aq_if_enable_intr),
@@ -287,7 +284,6 @@ static device_method_t aq_if_methods[] = {
 
 	/* Informational/diagnostic */
 	DEVMETHOD(ifdi_led_func, aq_if_led_func),
-//	DEVMETHOD(ifdi_debug, aq_if_debug),
 
 	DEVMETHOD_END
 };
