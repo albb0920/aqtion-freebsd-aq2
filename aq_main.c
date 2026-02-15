@@ -900,14 +900,16 @@ static u_int aq_mc_filter_apply(void *arg, struct sockaddr_dl *dl, u_int count)
 	struct aq_dev *softc = arg;
 	struct aq_hw *hw = &softc->hw;
 	u8 *mac_addr = NULL;
+	u32 index;
 
 	if ((int)count >= aq_mc_slots(hw))
 		return (0);
 
+	index = AQ_HW_MAC_MIN + count;
 	mac_addr = LLADDR(dl);
-	aq_hw_mac_addr_set(hw, mac_addr, count + 1);
+	aq_hw_mac_addr_set(hw, mac_addr, index);
 
-	aq_log_detail("set %d mc address %6D", count + 1, mac_addr, ":");
+	aq_log_detail("set %u mc address %6D", index, mac_addr, ":");
 	return (1);
 }
 #else
@@ -916,16 +918,18 @@ static int aq_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
 	struct aq_dev *softc = arg;
 	struct aq_hw *hw = &softc->hw;
 	u8 *mac_addr = NULL;
+	u32 index;
 
 	if (ifma->ifma_addr->sa_family != AF_LINK)
 		return (0);
 	if (count >= aq_mc_slots(hw))
 		return (0);
 
+	index = AQ_HW_MAC_MIN + (u32)count;
 	mac_addr = LLADDR((struct sockaddr_dl *)ifma->ifma_addr);
-	aq_hw_mac_addr_set(hw, mac_addr, count + 1);
+	aq_hw_mac_addr_set(hw, mac_addr, index);
 
-	aq_log_detail("set %d mc address %6D", count + 1, mac_addr, ":");
+	aq_log_detail("set %u mc address %6D", index, mac_addr, ":");
 	return (1);
 }
 #endif
@@ -940,6 +944,8 @@ static void aq_if_multi_set(if_ctx_t ctx)
 	struct aq_dev *softc = iflib_get_softc(ctx);
 	if_t ifp = iflib_get_ifp(ctx);
 	struct aq_hw  *hw = &softc->hw;
+	u32 mac_max = aq_hw_mac_max(hw);
+	u32 i;
 	AQ_DBG_ENTER();
 #if __FreeBSD_version >= 1300054
 	softc->mcnt = if_llmaddr_count(iflib_get_ifp(ctx));
@@ -958,6 +964,8 @@ static void aq_if_multi_set(if_ctx_t ctx)
 #else
 		if_multi_apply(iflib_get_ifp(ctx), aq_mc_filter_apply, softc);
 #endif
+		for (i = AQ_HW_MAC_MIN + softc->mcnt; i < mac_max; i++)
+			aq_hw_mac_addr_set(hw, NULL, (u8)i);
 	}
 	AQ_DBG_EXIT(0);
 }

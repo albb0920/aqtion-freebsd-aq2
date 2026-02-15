@@ -926,7 +926,8 @@ int aq_hw_mac_addr_set(struct aq_hw *hw, u8 *mac_addr, u8 index)
 
     AQ_DBG_ENTER();
     if (!mac_addr) {
-        err = -EINVAL;
+        rpfl2_uc_flr_en_set(hw, 0U, index);
+        err = aq_hw_err_from_flags(hw);
         goto err_exit;
     }
     h = (mac_addr[0] << 8) | (mac_addr[1]);
