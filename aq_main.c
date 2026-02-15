@@ -821,6 +821,7 @@ aq_if_init(if_ctx_t ctx)
 
 	aq_update_vlan_filters(softc);
 	aq_apply_rx_filters(softc);
+	aq_if_multi_set(ctx);
 
 	for (i = 0; i < softc->tx_rings_count; i++) {
 		struct aq_ring *ring = softc->tx_rings[i];
