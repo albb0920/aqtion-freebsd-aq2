@@ -1355,6 +1355,7 @@ aq_hw_set_promisc(struct aq_hw_s *self, bool l2_promisc, bool vlan_promisc,
 		uint32_t action = l2_promisc ? AQ2_ART_ACTION_DISABLE :
 		    AQ2_ART_ACTION_DROP;
 
+		/* ALLMC is gated by l2_mc_accept_all, conditional mask not needed */
 		aq2_filter_art_set(self, AQ2_RPF_INDEX_L2_PROMISC_OFF, 0,
 		    AQ2_RPF_TAG_UC_MASK | AQ2_RPF_TAG_ALLMC_MASK, action);
 
