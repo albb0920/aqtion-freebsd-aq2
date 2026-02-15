@@ -248,6 +248,12 @@ struct aq_hw {
 #define AQ_HW_IS_AQ2(HW) (IS_CHIP_FEATURE((HW), ANTIGUA))
 
 static inline u32
+aq_hw_mac_max(const struct aq_hw *hw)
+{
+	return (AQ_HW_IS_AQ2(hw) ? AQ2_HW_MAC_MAX : AQ_HW_MAC_MAX);
+}
+
+static inline u32
 aq_hw_mtu_jumbo(const struct aq_hw *hw)
 {
 	if (AQ_HW_IS_AQ2(hw))
