@@ -196,6 +196,8 @@ struct aq_hw {
 #define AQ_HW_MAC_MIN  1U
 #define AQ_HW_MAC_MAX  33U
 #define AQ2_HW_MAC_MAX 38U
+#define AQ_HW_RX_MAX_QUEUES 8U
+#define AQ_HW_TX_MAX_QUEUES 8U
 
 #define HW_ATL_B0_MIN_RXD 32U
 #define HW_ATL_B0_MIN_TXD 32U
