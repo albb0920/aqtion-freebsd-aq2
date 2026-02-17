@@ -510,8 +510,8 @@ aq_if_attach_pre(if_ctx_t ctx)
 	scctx->isc_txqsizes[0] = sizeof(aq_tx_desc_t) * scctx->isc_ntxd[0];
 	scctx->isc_rxqsizes[0] = sizeof(aq_rx_desc_t) * scctx->isc_nrxd[0];
 
-	scctx->isc_ntxqsets_max = HW_ATL_B0_RINGS_MAX;
-	scctx->isc_nrxqsets_max = HW_ATL_B0_RINGS_MAX;
+	scctx->isc_ntxqsets_max = AQ_HW_TX_MAX_QUEUES;
+	scctx->isc_nrxqsets_max = AQ_HW_RX_MAX_QUEUES;
 
 	/* iflib will map and release this bar */
 	scctx->isc_msix_bar = pci_msix_table_bar(softc->dev);
