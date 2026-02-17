@@ -150,6 +150,12 @@ struct aq_dev {
 
 	uint8_t			rss_key[HW_ATL_RSS_HASHKEY_SIZE];
 	uint8_t			rss_table[HW_ATL_RSS_INDIRECTION_TABLE_MAX];
+	uint32_t		rss_hash_config;
+	uint32_t		rss_hash_config_hw;
+	bool			rss_flowid_shared;
+	bool			rss_udp_enabled;
+	bool			rss_udp_enabled_hw;
+	uint8_t			rss_type_valid[16];
 };
 
 typedef struct aq_dev aq_dev_t;

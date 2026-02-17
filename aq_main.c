@@ -197,6 +197,18 @@ static int aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_downshift(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_loopback(SYSCTL_HANDLER_ARGS);
+static int aq_rss_sys_hashconfig(void);
+static uint32_t aq_rss_normalize_hashconfig(uint32_t hashconfig);
+static bool aq_rss_hash_algo_supported(void);
+static bool aq_rss_build_key(struct aq_dev *softc);
+static bool aq_rss_build_indirection(struct aq_dev *softc);
+static bool aq_rss_udp_requested(uint32_t hashconfig);
+static bool aq_rss_udp_auto_enable(struct aq_dev *softc, uint32_t hashconfig);
+static bool aq_rss_should_enable_udp(struct aq_dev *softc, uint32_t hashconfig);
+static uint32_t aq_rss_hw_hashconfig(struct aq_dev *softc, bool udp_enabled);
+static void aq_rss_type_valid_update(struct aq_dev *softc);
+static void aq_rss_mark_opaque(struct aq_dev *softc);
+static void aq_rss_init_config(struct aq_dev *softc);
 
 /* Interrupt enable / disable */
 static void	aq_if_enable_intr(if_ctx_t ctx);
@@ -331,9 +343,199 @@ static struct if_shared_ctx aq_sctx_init = {
 
 static SYSCTL_NODE(_hw, OID_AUTO, aq, CTLFLAG_RD, 0, "Atlantic driver parameters");
 /* UDP Receive-Side Scaling */
-static int aq_enable_rss_udp = 1;
+static int aq_enable_rss_udp = -1;
 SYSCTL_INT(_hw_aq, OID_AUTO, enable_rss_udp, CTLFLAG_RDTUN, &aq_enable_rss_udp, 0,
-    "Enable Receive-Side Scaling (RSS) for UDP");
+    "UDP RSS mode: -1=auto, 0=disable, 1=force enable");
+
+static int
+aq_rss_sys_hashconfig(void)
+{
+	return (rss_gethashconfig());
+}
+
+static uint32_t
+aq_rss_normalize_hashconfig(uint32_t hashconfig)
+{
+	hashconfig |= (hashconfig & RSS_HASHTYPE_RSS_IPV6_EX) ?
+	    RSS_HASHTYPE_RSS_IPV6 : 0;
+	hashconfig |= (hashconfig & RSS_HASHTYPE_RSS_TCP_IPV6_EX) ?
+	    RSS_HASHTYPE_RSS_TCP_IPV6 : 0;
+#ifdef RSS_HASHTYPE_RSS_UDP_IPV6_EX
+	hashconfig |= (hashconfig & RSS_HASHTYPE_RSS_UDP_IPV6_EX) ?
+	    RSS_HASHTYPE_RSS_UDP_IPV6 : 0;
+#endif
+
+	return (hashconfig & (RSS_HASHTYPE_RSS_IPV4 |
+	    RSS_HASHTYPE_RSS_TCP_IPV4 |
+	    RSS_HASHTYPE_RSS_IPV6 |
+	    RSS_HASHTYPE_RSS_TCP_IPV6 |
+	    RSS_HASHTYPE_RSS_UDP_IPV4 |
+	    RSS_HASHTYPE_RSS_UDP_IPV6));
+}
+
+static bool
+aq_rss_hash_algo_supported(void)
+{
+#ifdef RSS
+	return (rss_gethashalgo() == RSS_HASH_TOEPLITZ);
+#else
+	return (false);
+#endif
+}
+
+static bool
+aq_rss_build_key(struct aq_dev *softc)
+{
+	if (aq_rss_hash_algo_supported()) {
+		rss_getkey(softc->rss_key);
+		return (true);
+	}
+
+	arc4rand(softc->rss_key, HW_ATL_RSS_HASHKEY_SIZE, 0);
+	return (false);
+}
+
+static bool
+aq_rss_build_indirection(struct aq_dev *softc)
+{
+	const uint32_t qcnt = MAX(softc->rx_rings_count, 1u);
+
+#ifdef RSS
+	if (aq_rss_hash_algo_supported()) {
+		for (int i = 0; i < ARRAY_SIZE(softc->rss_table); i++) {
+			softc->rss_table[i] =
+			    (uint8_t)(rss_get_indirection_to_bucket(i) % qcnt);
+		}
+		return (true);
+	}
+#endif
+
+	for (int i = 0; i < ARRAY_SIZE(softc->rss_table); i++)
+		softc->rss_table[i] = (uint8_t)(i % qcnt);
+
+	return (false);
+}
+
+static bool
+aq_rss_udp_requested(uint32_t hashconfig)
+{
+	return ((hashconfig & (RSS_HASHTYPE_RSS_UDP_IPV4 |
+	    RSS_HASHTYPE_RSS_UDP_IPV6)) != 0);
+}
+
+static bool
+aq_rss_udp_auto_enable(struct aq_dev *softc, uint32_t hashconfig)
+{
+	/*
+	 * Keep non-AQ2 conservative: older hardware/firmware has known
+	 * fragmented UDP RSS behavior, so auto mode leaves UDP RSS off there.
+	 */
+	if (!aq_rss_udp_requested(hashconfig))
+		return (false);
+
+	if (AQ_HW_IS_AQ2(&softc->hw))
+		return (true);
+
+	return (false);
+}
+
+static bool
+aq_rss_should_enable_udp(struct aq_dev *softc, uint32_t hashconfig)
+{
+	switch (aq_enable_rss_udp) {
+	case -1:
+		return (aq_rss_udp_auto_enable(softc, hashconfig));
+	case 0:
+		return (false);
+	case 1:
+		return (true);
+	default:
+		device_printf(softc->dev,
+		    "atlantic: invalid hw.aq.enable_rss_udp=%d, using auto\n",
+		    aq_enable_rss_udp);
+		return (aq_rss_udp_auto_enable(softc, hashconfig));
+	}
+}
+
+static uint32_t
+aq_rss_hw_hashconfig(struct aq_dev *softc, bool udp_enabled)
+{
+	uint32_t hashconfig = RSS_HASHTYPE_RSS_IPV4 |
+	    RSS_HASHTYPE_RSS_TCP_IPV4 |
+	    RSS_HASHTYPE_RSS_IPV6 |
+	    RSS_HASHTYPE_RSS_TCP_IPV6;
+
+	/*
+	 * AQ2 currently enables all RSS hash types in hardware init and
+	 * aq_hw_udp_rss_enable() is a no-op, so treat UDP as effectively on.
+	 */
+	if (udp_enabled || AQ_HW_IS_AQ2(&softc->hw))
+		hashconfig |= RSS_HASHTYPE_RSS_UDP_IPV4 |
+		    RSS_HASHTYPE_RSS_UDP_IPV6;
+
+	return (hashconfig);
+}
+
+static void
+aq_rss_type_valid_update(struct aq_dev *softc)
+{
+	memset(softc->rss_type_valid, 0, sizeof(softc->rss_type_valid));
+
+	if (!softc->rss_flowid_shared)
+		return;
+
+	softc->rss_type_valid[AQ_RX_RSS_TYPE_IPV4] =
+	    (softc->rss_hash_config & RSS_HASHTYPE_RSS_IPV4) != 0 &&
+	    (softc->rss_hash_config_hw & RSS_HASHTYPE_RSS_IPV4) != 0;
+	softc->rss_type_valid[AQ_RX_RSS_TYPE_IPV6] =
+	    (softc->rss_hash_config & RSS_HASHTYPE_RSS_IPV6) != 0 &&
+	    (softc->rss_hash_config_hw & RSS_HASHTYPE_RSS_IPV6) != 0;
+	softc->rss_type_valid[AQ_RX_RSS_TYPE_IPV4_TCP] =
+	    (softc->rss_hash_config & RSS_HASHTYPE_RSS_TCP_IPV4) != 0 &&
+	    (softc->rss_hash_config_hw & RSS_HASHTYPE_RSS_TCP_IPV4) != 0;
+	softc->rss_type_valid[AQ_RX_RSS_TYPE_IPV6_TCP] =
+	    (softc->rss_hash_config & RSS_HASHTYPE_RSS_TCP_IPV6) != 0 &&
+	    (softc->rss_hash_config_hw & RSS_HASHTYPE_RSS_TCP_IPV6) != 0;
+	softc->rss_type_valid[AQ_RX_RSS_TYPE_IPV4_UDP] =
+	    (softc->rss_hash_config & RSS_HASHTYPE_RSS_UDP_IPV4) != 0 &&
+	    (softc->rss_hash_config_hw & RSS_HASHTYPE_RSS_UDP_IPV4) != 0;
+	softc->rss_type_valid[AQ_RX_RSS_TYPE_IPV6_UDP] =
+	    (softc->rss_hash_config & RSS_HASHTYPE_RSS_UDP_IPV6) != 0 &&
+	    (softc->rss_hash_config_hw & RSS_HASHTYPE_RSS_UDP_IPV6) != 0;
+}
+
+static void
+aq_rss_mark_opaque(struct aq_dev *softc)
+{
+	softc->rss_flowid_shared = false;
+	aq_rss_type_valid_update(softc);
+}
+
+static void
+aq_rss_init_config(struct aq_dev *softc)
+{
+	const bool key_from_stack = aq_rss_build_key(softc);
+	const bool table_from_stack = aq_rss_build_indirection(softc);
+	bool udp_enabled;
+
+	softc->rss_hash_config =
+	    aq_rss_normalize_hashconfig(aq_rss_sys_hashconfig());
+	udp_enabled = aq_rss_should_enable_udp(softc, softc->rss_hash_config);
+	softc->rss_udp_enabled = udp_enabled;
+	softc->rss_hash_config_hw =
+	    aq_rss_hw_hashconfig(softc, softc->rss_udp_enabled);
+	softc->rss_udp_enabled_hw = (softc->rss_hash_config_hw &
+	    (RSS_HASHTYPE_RSS_UDP_IPV4 | RSS_HASHTYPE_RSS_UDP_IPV6)) != 0;
+	if (softc->rss_udp_enabled != softc->rss_udp_enabled_hw) {
+		device_printf(softc->dev,
+		    "atlantic: UDP RSS mode %d unsupported on this hardware,"
+		    " using effective mode %d\n",
+		    softc->rss_udp_enabled ? 1 : 0,
+		    softc->rss_udp_enabled_hw ? 1 : 0);
+	}
+	softc->rss_flowid_shared = key_from_stack && table_from_stack;
+	aq_rss_type_valid_update(softc);
+}
 
 
 /*
@@ -493,6 +695,7 @@ static int aq_if_attach_pre(if_ctx_t ctx)
 
 	scctx->isc_txqsizes[0] = sizeof(aq_tx_desc_t) * scctx->isc_ntxd[0];
 	scctx->isc_rxqsizes[0] = sizeof(aq_rx_desc_t) * scctx->isc_nrxd[0];
+	scctx->isc_rss_table_size = HW_ATL_RSS_INDIRECTION_TABLE_MAX;
 
 	scctx->isc_ntxqsets_max = HW_ATL_B0_RINGS_MAX;
 	scctx->isc_nrxqsets_max = HW_ATL_B0_RINGS_MAX;
@@ -536,8 +739,6 @@ static int aq_if_attach_post(if_ctx_t ctx)
 	case IFLIB_INTR_LEGACY:
 		rc = EOPNOTSUPP;
 		goto exit;
-        goto exit;
-		break;
 	case IFLIB_INTR_MSI:
 		break;
 	case IFLIB_INTR_MSIX:
@@ -549,11 +750,7 @@ static int aq_if_attach_post(if_ctx_t ctx)
 	}
 
 	aq_add_stats_sysctls(softc);
-	/* RSS */
-	arc4rand(softc->rss_key, HW_ATL_RSS_HASHKEY_SIZE, 0);
-	for (int i = ARRAY_SIZE(softc->rss_table); i--;){
-		softc->rss_table[i] = (u8)(i % softc->rx_rings_count);
-	}
+	aq_rss_init_config(softc);
 
 	/*
 	 * Start link negotiation already in attach path so carrier can be
@@ -821,11 +1018,28 @@ static void aq_if_init(if_ctx_t ctx)
 		aq_if_rx_queue_intr_enable(ctx, i);
 	}
 
-	aq_hw_start(hw);
+	err = aq_hw_start(hw);
+	if (err != EOK) {
+		device_printf(softc->dev, "atlantic: aq_hw_start: %d\n", err);
+	}
 	aq_if_enable_intr(ctx);
-	aq_hw_rss_hash_set(&softc->hw, softc->rss_key);
-	aq_hw_rss_set(&softc->hw, softc->rss_table);
-	aq_hw_udp_rss_enable(hw, aq_enable_rss_udp);
+	err = aq_hw_rss_hash_set(&softc->hw, softc->rss_key);
+	if (err != EOK) {
+		device_printf(softc->dev, "atlantic: aq_hw_rss_hash_set: %d\n",
+		    err);
+		aq_rss_mark_opaque(softc);
+	}
+	err = aq_hw_rss_set(&softc->hw, softc->rss_table);
+	if (err != EOK) {
+		device_printf(softc->dev, "atlantic: aq_hw_rss_set: %d\n", err);
+		aq_rss_mark_opaque(softc);
+	}
+	err = aq_hw_udp_rss_enable(hw, softc->rss_udp_enabled);
+	if (err != EOK) {
+		device_printf(softc->dev, "atlantic: aq_hw_udp_rss_enable: %d\n",
+		    err);
+		aq_rss_mark_opaque(softc);
+	}
 	aq_hw_set_eee_rate(hw, hw->eee_rate);
 	if (hw->fw_ops == &aq_fw2x_ops) {
 		if (softc->downshift)
@@ -1415,6 +1629,15 @@ static int aq_sysctl_print_rss_config(SYSCTL_HANDLER_ARGS)
 		sbuf_printf(buf, "0x%02x ", softc->rss_key[i]);
 	}
 	sbuf_printf(buf, "\n");
+	sbuf_printf(buf,
+	    "\nRSS stack hash config: 0x%08x\nRSS hardware hash config: "
+	    "0x%08x\nRSS hash alignment: %s\nRSS UDP requested: %s\n"
+	    "RSS UDP effective: %s\n",
+	    softc->rss_hash_config,
+	    softc->rss_hash_config_hw,
+	    softc->rss_flowid_shared ? "shared" : "opaque",
+	    softc->rss_udp_enabled ? "enabled" : "disabled",
+	    softc->rss_udp_enabled_hw ? "enabled" : "disabled");
 
 	error = sbuf_finish(buf);
 	if (error)

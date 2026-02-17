@@ -35,6 +35,8 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "opt_rss.h"
+
 #include <sys/param.h>
 #include <machine/param.h>
 #include <sys/kernel.h>
@@ -46,6 +48,7 @@ __FBSDID("$FreeBSD$");
 #include <net/if_dl.h>
 #include <net/ethernet.h>
 #include <net/iflib.h>
+#include <net/rss_config.h>
 #include <netinet/in.h>
 
 #include "aq_common.h"
@@ -56,6 +59,10 @@ __FBSDID("$FreeBSD$");
 #include "aq_hw.h"
 #include "aq_hw_llh.h"
 
+#ifndef M_HASHTYPE_OPAQUE_HASH
+#define M_HASHTYPE_OPAQUE_HASH M_HASHTYPE_OPAQUE
+#endif
+
 /* iflib txrx interface prototypes */
 static int aq_isc_txd_encap(void *arg, if_pkt_info_t pi);
 static void aq_isc_txd_flush(void *arg, uint16_t txqid, qidx_t pidx);
@@ -64,6 +71,9 @@ static void aq_ring_rx_refill(void* arg, if_rxd_update_t iru);
 static void aq_isc_rxd_flush(void *arg, uint16_t rxqid, uint8_t flid __unused, qidx_t pidx);
 static int aq_isc_rxd_available(void *arg, uint16_t rxqid, qidx_t idx, qidx_t budget);
 static int aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri);
+#if defined(IFLIB_FEATURE_QUEUE_SELECT) && (__FreeBSD_version >= IFLIB_FEATURE_QUEUE_SELECT)
+static qidx_t aq_isc_txq_select(void *arg, struct mbuf *m);
+#endif
 
 struct if_txrx aq_txrx = {
 	.ift_txd_encap = aq_isc_txd_encap,
@@ -73,7 +83,10 @@ struct if_txrx aq_txrx = {
 	.ift_rxd_pkt_get = aq_isc_rxd_pkt_get,
 	.ift_rxd_refill = aq_ring_rx_refill,
 	.ift_rxd_flush = aq_isc_rxd_flush,
-	.ift_legacy_intr = NULL
+	.ift_legacy_intr = NULL,
+#if defined(IFLIB_FEATURE_QUEUE_SELECT) && (__FreeBSD_version >= IFLIB_FEATURE_QUEUE_SELECT)
+	.ift_txq_select = aq_isc_txq_select,
+#endif
 };
 
 
@@ -82,6 +95,37 @@ aq_next(uint32_t i, uint32_t lim)
 {
     return (i == lim) ? 0 : i + 1;
 }
+
+#if defined(IFLIB_FEATURE_QUEUE_SELECT) && (__FreeBSD_version >= IFLIB_FEATURE_QUEUE_SELECT)
+static qidx_t
+aq_isc_txq_select(void *arg, struct mbuf *m)
+{
+	aq_dev_t *aq_dev = arg;
+	uint32_t qid = 0;
+#ifdef ALTQ
+	if_t ifp;
+#endif
+
+	if (__predict_false(aq_dev->tx_rings_count <= 1 ||
+	    M_HASHTYPE_GET(m) == M_HASHTYPE_NONE))
+		return (0);
+
+#ifdef ALTQ
+	ifp = iflib_get_ifp(aq_dev->ctx);
+	if (if_altq_is_enabled(ifp))
+		return (0);
+#endif
+
+#ifdef RSS
+	if (rss_hash2bucket(m->m_pkthdr.flowid, M_HASHTYPE_GET(m), &qid) != 0)
+		qid = m->m_pkthdr.flowid;
+#else
+	qid = m->m_pkthdr.flowid;
+#endif
+
+	return ((qidx_t)(qid % aq_dev->tx_rings_count));
+}
+#endif
 
 int aq_ring_rx_init(struct aq_hw *hw, struct aq_ring *ring)
 /*                     uint64_t ring_addr,
@@ -337,6 +381,7 @@ static int aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 	if_t ifp;
 	int cidx, rc = 0, i;
 	size_t len, total_len;
+	uint8_t rss_type;
 
 	AQ_DBG_ENTERA("[%d] start=%d", ring->index, ri->iri_cidx);
 	cidx = ri->iri_cidx;
@@ -381,9 +426,12 @@ static int aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 	if ((if_getcapenable(ifp) & IFCAP_RXCSUM) != 0) {
 		aq_rx_set_cso_flags(rx_desc, ri);
 	}
-	ri->iri_rsstype = bsd_rss_type[rx_desc->wb.rss_type & 0xF];
+	rss_type = rx_desc->wb.rss_type & 0xF;
+	ri->iri_rsstype = bsd_rss_type[rss_type];
 	if (ri->iri_rsstype != M_HASHTYPE_NONE) {
 		ri->iri_flowid = le32toh(rx_desc->wb.rss_hash);
+		if (!aq_dev->rss_flowid_shared || !aq_dev->rss_type_valid[rss_type])
+			ri->iri_rsstype = M_HASHTYPE_OPAQUE_HASH;
 	}
 
 	ri->iri_len = total_len;
