@@ -1213,7 +1213,12 @@ fail:
 static bool
 aq_is_vlan_promisc_required(struct aq_dev *softc)
 {
+	if_t ifp = iflib_get_ifp(softc->ctx);
 	int vlan_tag_count;
+
+	/* If hardware VLAN filtering is disabled, stay in VLAN promisc. */
+	if (!(if_getcapenable(ifp) & IFCAP_VLAN_HWFILTER))
+		return (true);
 
 	bit_count(softc->vlan_tags, 0, 4096, &vlan_tag_count);
 
@@ -1229,6 +1234,7 @@ aq_update_vlan_filters(struct aq_dev *softc)
 {
 	struct aq_rx_filter_vlan aq_vlans[AQ_HW_VLAN_MAX_FILTERS];
 	struct aq_hw  *hw = &softc->hw;
+	if_t ifp = iflib_get_ifp(softc->ctx);
 	bool used[4096];
 	int bit_pos = 0;
 	int vlan_tag = -1;
@@ -1236,6 +1242,18 @@ aq_update_vlan_filters(struct aq_dev *softc)
 
 	memset(used, 0, sizeof(used));
 	memset(aq_vlans, 0, sizeof(aq_vlans));
+
+	/*
+	 * If VLAN hardware filtering is disabled, force VLAN promisc and skip
+	 * programming the table so all VLAN tags are accepted.
+	 */
+	if (!(if_getcapenable(ifp) & IFCAP_VLAN_HWFILTER)) {
+		if (AQ_HW_IS_AQ2(hw))
+			aq2_hw_vlan_promisc_set(hw, true);
+		else
+			hw_atl_b0_hw_vlan_promisc_set(hw, true);
+		return;
+	}
 
 	if (AQ_HW_IS_AQ2(hw))
 		aq2_hw_vlan_promisc_set(hw, true);
