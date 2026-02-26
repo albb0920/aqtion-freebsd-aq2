@@ -560,7 +560,7 @@ aq_isc_txd_encap(void *arg, if_pkt_info_t pi)
 	ring->tx_tail = pidx;
 
 	ring->stats.tx_pkts++;
-	ring->stats.tx_bytes += pay_len;
+	ring->stats.tx_bytes += pi->ipi_len;
 
 	pi->ipi_new_pidx = pidx;
 
