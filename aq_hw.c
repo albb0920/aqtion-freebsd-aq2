@@ -66,6 +66,7 @@ __FBSDID("$FreeBSD$");
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <net/iflib.h>
+#include <net/rss_config.h>
 
 #include "aq_device.h"
 #include "aq_fw.h"
@@ -92,7 +93,25 @@ __FBSDID("$FreeBSD$");
 #define AQ2_RPF_REDIR2_REG 0x54c8u
 #define  AQ2_RPF_REDIR2_INDEX (1u << 12)
 #define  AQ2_RPF_REDIR2_HASHTYPE_MSK 0x000001ffu
-#define  AQ2_RPF_REDIR2_HASHTYPE_ALL 0x000001ffu
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV4 BIT(0)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV4_TCP BIT(1)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV4_UDP BIT(2)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV6 BIT(3)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV6_TCP BIT(4)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV6_UDP BIT(5)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV6_EX BIT(6)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV6_TCP_EX BIT(7)
+#define  AQ2_RPF_REDIR2_HASHTYPE_IPV6_UDP_EX BIT(8)
+#define  AQ2_RPF_REDIR2_HASHTYPE_ALL \
+	(AQ2_RPF_REDIR2_HASHTYPE_IPV4 | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV4_TCP | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV4_UDP | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV6 | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV6_TCP | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV6_UDP | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV6_EX | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV6_TCP_EX | \
+	 AQ2_RPF_REDIR2_HASHTYPE_IPV6_UDP_EX)
 
 #define AQ2_RPF_REC_TAB_ENABLE_REG 0x6ff0u
 #define  AQ2_RPF_REC_TAB_ENABLE_MSK 0x0000ffffu
@@ -843,11 +862,6 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 	    reg_rx_flr_rss_control1set(hw, 0xB3333333U);
 	}
 
-	if (AQ_HW_IS_AQ2(hw)) {
-	    AQ_WRITE_REG_BIT(hw, AQ2_RPF_REDIR2_REG,
-	        AQ2_RPF_REDIR2_HASHTYPE_MSK, 0, AQ2_RPF_REDIR2_HASHTYPE_ALL);
-	}
-
 	/* Multicast filters */
 	{
 	    uint32_t mac_max = aq_hw_mac_max(hw);
@@ -1430,6 +1444,39 @@ aq_hw_rss_hash_get(struct aq_hw_s *self,
 
 	AQ_DBG_EXIT(err);
 	return (err);
+}
+
+int
+aq_hw_rss_hash_types_set(struct aq_hw_s *self, uint32_t rss_hash_cfg)
+{
+	uint32_t aq2_hash_types = 0U;
+
+	if (!AQ_HW_IS_AQ2(self))
+		return (0);
+
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_IPV4)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV4;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_TCP_IPV4)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV4_TCP;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_UDP_IPV4)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV4_UDP;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_IPV6)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV6;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_TCP_IPV6)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV6_TCP;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_UDP_IPV6)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV6_UDP;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_IPV6_EX)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV6_EX;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_TCP_IPV6_EX)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV6_TCP_EX;
+	if (rss_hash_cfg & RSS_HASHTYPE_RSS_UDP_IPV6_EX)
+		aq2_hash_types |= AQ2_RPF_REDIR2_HASHTYPE_IPV6_UDP_EX;
+
+	AQ_WRITE_REG_BIT(self, AQ2_RPF_REDIR2_REG,
+	    AQ2_RPF_REDIR2_HASHTYPE_MSK, 0, aq2_hash_types);
+
+	return (aq_hw_err_from_flags(self));
 }
 
 int

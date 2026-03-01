@@ -411,6 +411,7 @@ int aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc);
 
 int aq_hw_rss_hash_set(struct aq_hw_s *self, uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE]);
 int aq_hw_rss_hash_get(struct aq_hw_s *self, uint8_t rss_key[HW_ATL_RSS_HASHKEY_SIZE]);
+int aq_hw_rss_hash_types_set(struct aq_hw_s *self, uint32_t rss_hash_cfg);
 int aq_hw_rss_set(struct aq_hw_s *self, uint8_t rss_table[HW_ATL_RSS_INDIRECTION_TABLE_MAX]);
 int aq_hw_udp_rss_enable(struct aq_hw_s *self, bool enable);
 

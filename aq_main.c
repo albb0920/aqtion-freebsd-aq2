@@ -212,6 +212,8 @@ static int aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_downshift(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_loopback(SYSCTL_HANDLER_ARGS);
+static void aq_rss_prepare(struct aq_dev *softc, uint32_t *rss_hash_cfg);
+static bool aq_rss_udp_enabled(uint32_t rss_hash_cfg);
 
 /* Interrupt enable / disable */
 static void	aq_if_enable_intr(if_ctx_t ctx);
@@ -349,6 +351,10 @@ static int aq_enable_rss_udp = 1;
 SYSCTL_INT(_hw_aq, OID_AUTO, enable_rss_udp, CTLFLAG_RDTUN, &aq_enable_rss_udp,
      0, "Enable Receive-Side Scaling (RSS) for UDP");
 
+#define AQ_RSS_UDP_HASH_TYPES \
+	(RSS_HASHTYPE_RSS_UDP_IPV4 | RSS_HASHTYPE_RSS_UDP_IPV6 | \
+	 RSS_HASHTYPE_RSS_UDP_IPV6_EX)
+
 
 /*
  * Device Methods
@@ -357,6 +363,38 @@ static void *
 aq_register(device_t dev)
 {
 	return (&aq_sctx_init);
+}
+
+static void
+aq_rss_prepare(struct aq_dev *softc, uint32_t *rss_hash_cfg)
+{
+	uint32_t qcnt;
+	uint32_t i;
+
+	qcnt = softc->rx_rings_count;
+
+	rss_getkey(softc->rss_key);
+	*rss_hash_cfg = rss_gethashconfig();
+
+#ifdef RSS
+	if (rss_gethashalgo() == RSS_HASH_TOEPLITZ) {
+		for (i = 0; i < ARRAY_SIZE(softc->rss_table); i++) {
+			softc->rss_table[i] = (uint8_t)
+			    (rss_get_indirection_to_bucket(i) % qcnt);
+		}
+	} else
+#endif
+	{
+		for (i = 0; i < ARRAY_SIZE(softc->rss_table); i++) {
+			softc->rss_table[i] = (uint8_t)(i % qcnt);
+		}
+	}
+}
+
+static bool
+aq_rss_udp_enabled(uint32_t rss_hash_cfg)
+{
+	return aq_enable_rss_udp && ((rss_hash_cfg & AQ_RSS_UDP_HASH_TYPES) != 0);
 }
 
 static int
@@ -567,11 +605,6 @@ aq_if_attach_post(if_ctx_t ctx)
 	}
 
 	aq_add_stats_sysctls(softc);
-	/* RSS */
-	arc4rand(softc->rss_key, HW_ATL_RSS_HASHKEY_SIZE, 0);
-	for (int i = ARRAY_SIZE(softc->rss_table); i--;) {
-		softc->rss_table[i] = (uint8_t)(i % softc->rx_rings_count);
-	}
 
 	/*
 	 * aq_if_init is only called when brought up by ifconfig up.
@@ -804,6 +837,8 @@ aq_if_init(if_ctx_t ctx)
 	struct aq_hw *hw;
 	if_t ifp;
 	struct ifmediareq ifmr;
+	uint32_t rss_hash_cfg;
+	bool udp_rss_enable;
 	int i, err;
 
 	AQ_DBG_ENTER();
@@ -855,11 +890,17 @@ aq_if_init(if_ctx_t ctx)
 		aq_if_rx_queue_intr_enable(ctx, i);
 	}
 
+	aq_rss_prepare(softc, &rss_hash_cfg);
+	udp_rss_enable = aq_rss_udp_enabled(rss_hash_cfg);
+	if (!udp_rss_enable)
+		rss_hash_cfg &= ~AQ_RSS_UDP_HASH_TYPES;
+
 	aq_hw_start(hw);
 	aq_if_enable_intr(ctx);
 	aq_hw_rss_hash_set(&softc->hw, softc->rss_key);
 	aq_hw_rss_set(&softc->hw, softc->rss_table);
-	aq_hw_udp_rss_enable(hw, aq_enable_rss_udp);
+	aq_hw_rss_hash_types_set(&softc->hw, rss_hash_cfg);
+	aq_hw_udp_rss_enable(hw, udp_rss_enable);
 	aq_hw_set_link_speed(hw, hw->link_rate);
 	aq_hw_set_eee_rate(hw, hw->eee_rate);
 	if (hw->fw_ops == &aq_fw2x_ops) {
