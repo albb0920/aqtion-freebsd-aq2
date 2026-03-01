@@ -852,15 +852,10 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 	rpb_rx_flow_ctl_mode_set(hw, 1U);
 
 	/* RSS Ring selection */
-	if (AQ_HW_IS_AQ2(hw)) {
-	    struct aq_dev *softc = (struct aq_dev *)hw->aq_dev;
-	    if (softc && softc->rx_rings_count > 1)
-	        reg_rx_flr_rss_control1set(hw, 0xB3333333U);
-	    else
-	        reg_rx_flr_rss_control1set(hw, 0U);
-	} else {
-	    reg_rx_flr_rss_control1set(hw, 0xB3333333U);
-	}
+	struct aq_dev *softc = (struct aq_dev *)hw->aq_dev;
+
+	reg_rx_flr_rss_control1set(hw,
+	    aq_rss_enabled(softc) ? 0xB3333333U : 0U);
 
 	/* Multicast filters */
 	{

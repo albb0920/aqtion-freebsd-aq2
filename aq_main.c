@@ -368,10 +368,19 @@ aq_register(device_t dev)
 static void
 aq_rss_prepare(struct aq_dev *softc, uint32_t *rss_hash_cfg)
 {
+	bool rss_enabled;
 	uint32_t qcnt;
 	uint32_t i;
 
-	qcnt = softc->rx_rings_count;
+	rss_enabled = aq_rss_enabled(softc);
+	qcnt = rss_enabled ? softc->rx_rings_count : 1U;
+
+	if (!rss_enabled) {
+		memset(softc->rss_key, 0, sizeof(softc->rss_key));
+		memset(softc->rss_table, 0, sizeof(softc->rss_table));
+		*rss_hash_cfg = 0;
+		return;
+	}
 
 	rss_getkey(softc->rss_key);
 	*rss_hash_cfg = rss_gethashconfig();

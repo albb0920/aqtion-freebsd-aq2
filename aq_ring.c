@@ -397,9 +397,14 @@ aq_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 	if ((if_getcapenable(ifp) & IFCAP_RXCSUM) != 0) {
 		aq_rx_set_cso_flags(rx_desc, ri);
 	}
-	ri->iri_rsstype = bsd_rss_type[rx_desc->wb.rss_type & 0xF];
-	if (ri->iri_rsstype != M_HASHTYPE_NONE) {
-		ri->iri_flowid = le32toh(rx_desc->wb.rss_hash);
+
+	ri->iri_rsstype = M_HASHTYPE_NONE;
+	ri->iri_flowid = 0;
+	if (aq_rss_enabled(aq_dev)) {
+		ri->iri_rsstype = bsd_rss_type[rx_desc->wb.rss_type & 0xF];
+		if (ri->iri_rsstype != M_HASHTYPE_NONE) {
+			ri->iri_flowid = le32toh(rx_desc->wb.rss_hash);
+		}
 	}
 
 	ri->iri_len = total_len;

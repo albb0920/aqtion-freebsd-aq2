@@ -154,6 +154,12 @@ struct aq_dev {
 
 typedef struct aq_dev aq_dev_t;
 
+static inline bool
+aq_rss_enabled(const struct aq_dev *aq_dev)
+{
+	return (aq_dev != NULL && aq_dev->rx_rings_count > 1);
+}
+
 int aq_update_hw_stats(aq_dev_t *aq_dev);
 void aq_initmedia(aq_dev_t *aq_dev);
 int aq_linkstat_isr(void *arg);
