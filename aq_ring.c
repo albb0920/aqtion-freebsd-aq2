@@ -423,7 +423,8 @@ aq_setup_offloads(aq_dev_t *aq_dev, if_pkt_info_t pi, aq_tx_desc_t *txd,
 {
 	AQ_DBG_ENTER();
 	txd->cmd |= tx_desc_cmd_fcs;
-	txd->cmd |= (pi->ipi_csum_flags & (CSUM_IP|CSUM_TSO)) ?
+	txd->cmd |= ((pi->ipi_flags & IPI_TX_IPV4) &&
+	    (pi->ipi_csum_flags & (CSUM_IP | CSUM_TSO))) ?
 	    tx_desc_cmd_ipv4 : 0;
 	txd->cmd |= (pi->ipi_csum_flags & (CSUM_IP_TCP | CSUM_IP6_TCP |
 	    CSUM_IP_UDP | CSUM_IP6_UDP)) ?  tx_desc_cmd_l4cs : 0;
