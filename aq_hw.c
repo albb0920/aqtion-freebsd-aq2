@@ -174,6 +174,15 @@ __FBSDID("$FreeBSD$");
 #define AQ2_TX_INTR_MODERATION_CTL_REG(i) (0x7c28u + (i) * 0x40u)
 #define AQ2_TX_INTR_MODERATION_CTL_EN (1u << 1)
 
+#define AQ_A0_AUTO_MODERATION_REG 0x00002A00U
+#define AQ_A0_AUTO_MODERATION_RESET 0x40000000U
+#define AQ_A0_AUTO_MODERATION_RESTORE 0x8D000000U
+
+#define AQ_ITR_REG_ENABLE_PATTERN 2U
+#define AQ_ITR_REG_MIN_TIMER_MAX 0xFFU
+#define AQ_ITR_REG_MAX_TIMER_MAX 0x1FFU
+#define AQ_ITR_A0_TIMER_MAX 0x7FFU
+
 /*
  * Deterministic PCP (0..7) -> TC mapping for AQ2.
  * For now we keep a fixed 4-TC policy:
@@ -183,6 +192,202 @@ __FBSDID("$FreeBSD$");
  *   PCP 6,7 -> TC3
  */
 static const uint8_t aq2_pcp_to_tc_map[8] = { 0, 0, 1, 1, 2, 2, 3, 3 };
+
+struct aq_itr_timer_pair {
+	uint16_t min;
+	uint16_t max;
+};
+
+/*
+ * Interrupt moderation tables program the per-speed minimum and maximum
+ * timer fields. Firmware reports both 5G and 5GSR links as 5000 Mbps, so
+ * a single 5G bucket is sufficient here.
+ */
+static const struct aq_itr_timer_pair aq_itr_tx_table[] = {
+	{ 0x0FU, 0x0FFU },	/* 10Gbit */
+	{ 0x0FU, 0x1FFU },	/* 5Gbit */
+	{ 0x0FU, 0x1FFU },	/* 2.5Gbit */
+	{ 0x0FU, 0x1FFU },	/* 1Gbit */
+	{ 0x0FU, 0x1FFU },	/* 100Mbit */
+};
+
+static const struct aq_itr_timer_pair aq_itr_rx_table[] = {
+	{ 0x06U, 0x038U },	/* 10Gbit */
+	{ 0x0CU, 0x070U },	/* 5Gbit */
+	{ 0x18U, 0x0E0U },	/* 2.5Gbit */
+	{ 0x30U, 0x080U },	/* 1Gbit */
+	{ 0x04U, 0x050U },	/* 100Mbit */
+};
+
+static const uint16_t aq_itr_a0_table[] = {
+	0x01CU,		/* 10Gbit */
+	0x039U,		/* 5Gbit */
+	0x073U,		/* 2.5Gbit */
+	0x120U,		/* 1Gbit */
+	0x1FFU,		/* 100Mbit */
+};
+
+static unsigned int
+aq_hw_link_speed_to_itr_index(uint32_t mbps)
+{
+	switch (mbps) {
+	case 5000U:
+		return (1U);
+	case 2500U:
+		return (2U);
+	case 1000U:
+		return (3U);
+	case 100U:
+		return (4U);
+	case 10000U:
+	default:
+		return (0U);
+	}
+}
+
+static uint32_t
+aq_hw_get_link_speed(struct aq_hw *hw)
+{
+	struct aq_hw_fc_info fc_neg;
+	uint32_t link_speed = 0U;
+
+	if (aq_hw_get_link_state(hw, &link_speed, &fc_neg) != 0)
+		link_speed = 0U;
+
+	return (link_speed);
+}
+
+static int
+aq_hw_interrupt_moderation_set_a0(struct aq_hw *hw)
+{
+	uint32_t link_speed;
+	uint32_t itr;
+	unsigned int i;
+
+	switch (hw->itr_mode) {
+	case AQ_ITR_MODE_OFF:
+		itr = 0U;
+		break;
+	case AQ_ITR_MODE_ON:
+		itr = min((uint32_t)(hw->itr_tx / 2U), AQ_ITR_A0_TIMER_MAX);
+		itr = 0x80000000U | (itr << 16);
+		break;
+	case AQ_ITR_MODE_AUTO: {
+		uint32_t n;
+		unsigned int speed_index;
+
+		link_speed = aq_hw_get_link_speed(hw);
+		n = AQ_READ_REG(hw, AQ_A0_AUTO_MODERATION_REG) & 0xFFFFU;
+		if (n < link_speed) {
+			itr = 0U;
+		} else {
+			speed_index = aq_hw_link_speed_to_itr_index(link_speed);
+			itr = 0x80000000U |
+			    ((uint32_t)aq_itr_a0_table[speed_index] << 16);
+		}
+
+		AQ_WRITE_REG(hw, AQ_A0_AUTO_MODERATION_REG,
+		    AQ_A0_AUTO_MODERATION_RESET);
+		AQ_WRITE_REG(hw, AQ_A0_AUTO_MODERATION_REG,
+		    AQ_A0_AUTO_MODERATION_RESTORE);
+		break;
+	}
+	default:
+		return (EINVAL);
+	}
+
+	for (i = HW_ATL_B0_RINGS_MAX; i--;) {
+		reg_irq_thr_set(hw, itr, i);
+	}
+
+	return (aq_hw_err_from_flags(hw));
+}
+
+int
+aq_hw_interrupt_moderation_set(struct aq_hw *hw)
+{
+	uint32_t itr_rx = AQ_ITR_REG_ENABLE_PATTERN;
+	uint32_t itr_tx = AQ_ITR_REG_ENABLE_PATTERN;
+	unsigned int speed_index;
+	unsigned int i;
+	int err;
+
+	AQ_DBG_ENTER();
+
+	if (AQ_HW_IS_AQ1_A0(hw)) {
+		err = aq_hw_interrupt_moderation_set_a0(hw);
+		AQ_DBG_EXIT(err);
+		return (err);
+	}
+
+	switch (hw->itr_mode) {
+	case AQ_ITR_MODE_OFF:
+		tdm_tx_desc_wr_wb_irq_en_set(hw, 1U);
+		tdm_tdm_intr_moder_en_set(hw, 0U);
+		rdm_rx_desc_wr_wb_irq_en_set(hw, 1U);
+		rdm_rdm_intr_moder_en_set(hw, 0U);
+		itr_tx = 0U;
+		itr_rx = 0U;
+		break;
+	case AQ_ITR_MODE_ON: {
+		uint32_t tx_max_timer;
+		uint32_t tx_min_timer;
+		uint32_t rx_max_timer;
+		uint32_t rx_min_timer;
+
+		tdm_tx_desc_wr_wb_irq_en_set(hw, 0U);
+		tdm_tdm_intr_moder_en_set(hw, 1U);
+		rdm_rx_desc_wr_wb_irq_en_set(hw, 0U);
+		rdm_rdm_intr_moder_en_set(hw, 1U);
+
+		tx_max_timer = min((uint32_t)(hw->itr_tx / 2U),
+		    AQ_ITR_REG_MAX_TIMER_MAX);
+		tx_min_timer = min(tx_max_timer / 2U, AQ_ITR_REG_MIN_TIMER_MAX);
+		rx_max_timer = min((uint32_t)(hw->itr_rx / 2U),
+		    AQ_ITR_REG_MAX_TIMER_MAX);
+		rx_min_timer = min(rx_max_timer / 2U, AQ_ITR_REG_MIN_TIMER_MAX);
+
+		itr_tx |= tx_min_timer << 8;
+		itr_tx |= tx_max_timer << 16;
+		itr_rx |= rx_min_timer << 8;
+		itr_rx |= rx_max_timer << 16;
+		break;
+	}
+	case AQ_ITR_MODE_AUTO:
+		tdm_tx_desc_wr_wb_irq_en_set(hw, 0U);
+		tdm_tdm_intr_moder_en_set(hw, 1U);
+		rdm_rx_desc_wr_wb_irq_en_set(hw, 0U);
+		rdm_rdm_intr_moder_en_set(hw, 1U);
+
+		speed_index = aq_hw_link_speed_to_itr_index(
+		    aq_hw_get_link_speed(hw));
+
+		itr_tx |= (uint32_t)aq_itr_tx_table[speed_index].min << 8;
+		itr_tx |= (uint32_t)aq_itr_tx_table[speed_index].max << 16;
+		itr_rx |= (uint32_t)aq_itr_rx_table[speed_index].min << 8;
+		itr_rx |= (uint32_t)aq_itr_rx_table[speed_index].max << 16;
+		break;
+	default:
+		err = EINVAL;
+		AQ_DBG_EXIT(err);
+		return (err);
+	}
+
+	for (i = HW_ATL_B0_RINGS_MAX; i--;) {
+		if (AQ_HW_IS_AQ2(hw)) {
+			AQ_WRITE_REG(hw, AQ2_TX_INTR_MODERATION_CTL_REG(i),
+			    itr_tx == 0U ? 0U :
+			    itr_tx | AQ2_TX_INTR_MODERATION_CTL_EN);
+		} else {
+			reg_tx_intr_moder_ctrl_set(hw, itr_tx, i);
+		}
+		reg_rx_intr_moder_ctrl_set(hw, itr_rx, i);
+	}
+
+	err = aq_hw_err_from_flags(hw);
+	AQ_DBG_EXIT(err);
+	return (err);
+}
 
 
 int
@@ -223,7 +428,8 @@ aq2_filter_art_set(struct aq_hw *hw, uint32_t idx, uint32_t tag,
 static void
 aq_hw_chip_features_init(struct aq_hw *hw, uint32_t *p)
 {
-	uint32_t chip_features = 0U;
+	uint32_t chip_features = hw->chip_features &
+	    (AQ_HW_CHIP_ATLANTIC | AQ_HW_CHIP_ANTIGUA);
 	uint32_t val = reg_glb_mif_id_get(hw);
 	uint32_t mif_rev = val & 0xFFU;
 
@@ -1040,75 +1246,6 @@ aq_hw_start(struct aq_hw *hw)
 	AQ_DBG_ENTER();
 	tpb_tx_buff_en_set(hw, 1U);
 	rpb_rx_buff_en_set(hw, 1U);
-	err = aq_hw_err_from_flags(hw);
-	AQ_DBG_EXIT(err);
-	return (err);
-}
-
-
-int
-aq_hw_interrupt_moderation_set(struct aq_hw *hw)
-{
-	static unsigned int AQ_HW_NIC_timers_table_rx_[][2] = {
-	    {80, 120},//{0x6U, 0x38U},/* 10Gbit */
-	    {0xCU, 0x70U},/* 5Gbit */
-	    {0xCU, 0x70U},/* 5Gbit 5GS */
-	    {0x18U, 0xE0U},/* 2.5Gbit */
-	    {0x30U, 0x80U},/* 1Gbit */
-	    {0x4U, 0x50U},/* 100Mbit */
-	};
-	static unsigned int AQ_HW_NIC_timers_table_tx_[][2] = {
-	    {0x4fU, 0x1ff},//{0xffU, 0xffU}, /* 10Gbit */
-	    {0x4fU, 0xffU}, /* 5Gbit */
-	    {0x4fU, 0xffU}, /* 5Gbit 5GS */
-	    {0x4fU, 0xffU}, /* 2.5Gbit */
-	    {0x4fU, 0xffU}, /* 1Gbit */
-	    {0x4fU, 0xffU}, /* 100Mbit */
-	};
-
-	uint32_t speed_index = 0U; //itr settings for 10 g
-	uint32_t itr_rx = 2U;
-	uint32_t itr_tx = 2U;
-	int custom_itr = hw->itr;
-	int active = custom_itr != 0;
-	int err;
-
-
-	AQ_DBG_ENTER();
-
-	if (custom_itr == -1) {
-		/* set min timer value */
-		itr_rx |= AQ_HW_NIC_timers_table_rx_[speed_index][0] << 0x8U;
-		/* set max timer value */
-		itr_rx |= AQ_HW_NIC_timers_table_rx_[speed_index][1] << 0x10U;
-
-		/* set min timer value */
-		itr_tx |= AQ_HW_NIC_timers_table_tx_[speed_index][0] << 0x8U;
-		/* set max timer value */
-		itr_tx |= AQ_HW_NIC_timers_table_tx_[speed_index][1] << 0x10U;
-	} else {
-		if (custom_itr > 0x1FF)
-			custom_itr = 0x1FF;
-
-	    itr_tx |= (custom_itr/2) << 0x8U; /* set min timer value */
-	    itr_tx |= custom_itr << 0x10U; /* set max timer value */
-	}
-
-	tdm_tx_desc_wr_wb_irq_en_set(hw, !active);
-	tdm_tdm_intr_moder_en_set(hw, active);
-	rdm_rx_desc_wr_wb_irq_en_set(hw, !active);
-	rdm_rdm_intr_moder_en_set(hw, active);
-
-	for (int i = HW_ATL_B0_RINGS_MAX; i--;) {
-	    if (AQ_HW_IS_AQ2(hw)) {
-	        AQ_WRITE_REG(hw, AQ2_TX_INTR_MODERATION_CTL_REG(i),
-	            itr_tx | AQ2_TX_INTR_MODERATION_CTL_EN);
-	    } else {
-	        reg_tx_intr_moder_ctrl_set(hw, itr_tx, i);
-	    }
-	    reg_rx_intr_moder_ctrl_set(hw, itr_rx, i);
-	}
-
 	err = aq_hw_err_from_flags(hw);
 	AQ_DBG_EXIT(err);
 	return (err);

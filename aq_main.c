@@ -212,12 +212,21 @@ static int aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_downshift(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_loopback(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_itr_mode(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_itr(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_apply_itr(struct aq_dev *softc, int itr_mode,
+    uint16_t itr_tx, uint16_t itr_rx);
 static void aq_rss_prepare(struct aq_dev *softc, uint32_t *rss_hash_cfg);
 static bool aq_rss_udp_enabled(uint32_t rss_hash_cfg);
 
 /* Interrupt enable / disable */
 static void	aq_if_enable_intr(if_ctx_t ctx);
 static void	aq_if_disable_intr(if_ctx_t ctx);
+
+enum aq_itr_sysctl_id {
+	AQ_ITR_SYSCTL_TX = 0,
+	AQ_ITR_SYSCTL_RX = 1,
+};
 static int	aq_if_rx_queue_intr_enable(if_ctx_t ctx, uint16_t rxqid);
 static int	aq_if_msix_intr_assign(if_ctx_t ctx, int msix);
 
@@ -455,12 +464,15 @@ aq_if_attach_pre(if_ctx_t ctx)
 		hw->chip_features |= AQ_HW_CHIP_ANTIGUA;
 		break;
 	default:
+		hw->chip_features |= AQ_HW_CHIP_ATLANTIC;
 		break;
 	}
 	hw->link_rate = aq_fw_speed_auto;
 	if (!AQ_HW_IS_AQ2(hw))
 		hw->link_rate &= ~aq_fw_10M;
-	hw->itr = -1;
+	hw->itr_mode = AQ_ITR_MODE_AUTO;
+	hw->itr_tx = 0;
+	hw->itr_rx = 0;
 	hw->fc.fc_rx = 1;
 	hw->fc.fc_tx = 1;
 	hw->eee_rate = 0;
@@ -905,6 +917,7 @@ aq_if_init(if_ctx_t ctx)
 		rss_hash_cfg &= ~AQ_RSS_UDP_HASH_TYPES;
 
 	aq_hw_start(hw);
+	aq_hw_interrupt_moderation_set(hw);
 	aq_if_enable_intr(ctx);
 	aq_hw_rss_hash_set(&softc->hw, softc->rss_key);
 	aq_hw_rss_set(&softc->hw, softc->rss_table);
@@ -2070,6 +2083,84 @@ static int aq_sysctl_loopback(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
+static int
+aq_sysctl_apply_itr(struct aq_dev *softc, int itr_mode, uint16_t itr_tx,
+    uint16_t itr_rx)
+{
+	struct aq_hw *hw = &softc->hw;
+	if_t ifp = iflib_get_ifp(softc->ctx);
+	int saved_mode = hw->itr_mode;
+	uint16_t saved_tx = hw->itr_tx;
+	uint16_t saved_rx = hw->itr_rx;
+	int err;
+
+	hw->itr_mode = itr_mode;
+	hw->itr_tx = itr_tx;
+	hw->itr_rx = itr_rx;
+
+	if ((if_getdrvflags(ifp) & IFF_DRV_RUNNING) == 0)
+		return (0);
+
+	err = aq_hw_interrupt_moderation_set(hw);
+	if (err == 0)
+		return (0);
+
+	hw->itr_mode = saved_mode;
+	hw->itr_tx = saved_tx;
+	hw->itr_rx = saved_rx;
+	(void)aq_hw_interrupt_moderation_set(hw);
+
+	return (err < 0 ? -err : err);
+}
+
+static int
+aq_sysctl_itr_mode(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	int val;
+	int err;
+
+	val = softc->hw.itr_mode;
+	err = sysctl_handle_int(oidp, &val, 0, req);
+	if (err || !req->newptr)
+		return (err);
+	if (val != AQ_ITR_MODE_OFF && val != AQ_ITR_MODE_ON &&
+	    val != AQ_ITR_MODE_AUTO)
+		return (EINVAL);
+
+	return (aq_sysctl_apply_itr(softc, val, softc->hw.itr_tx,
+	    softc->hw.itr_rx));
+}
+
+static int
+aq_sysctl_itr(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	struct aq_hw *hw = &softc->hw;
+	uint16_t itr_tx = hw->itr_tx;
+	uint16_t itr_rx = hw->itr_rx;
+	int val;
+	int err;
+
+	val = ((int)arg2 == AQ_ITR_SYSCTL_RX) ? hw->itr_rx : hw->itr_tx;
+	err = sysctl_handle_int(oidp, &val, 0, req);
+	if (err || !req->newptr)
+		return (err);
+	if (val < 0 || (unsigned int)val > AQ_ITR_USEC_MAX)
+		return (EINVAL);
+
+	if (AQ_HW_IS_AQ1_A0(hw)) {
+		itr_tx = (uint16_t)val;
+		itr_rx = (uint16_t)val;
+	} else if ((int)arg2 == AQ_ITR_SYSCTL_RX) {
+		itr_rx = (uint16_t)val;
+	} else {
+		itr_tx = (uint16_t)val;
+	}
+
+	return (aq_sysctl_apply_itr(softc, hw->itr_mode, itr_tx, itr_rx));
+}
+
 static int aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
@@ -2474,6 +2565,18 @@ aq_add_stats_sysctls(struct aq_dev *softc)
 	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "loopback",
 		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
 		aq_sysctl_loopback, "I", "Loopback mode (0=off,1=int,2=ext)");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "itr_mode",
+		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
+		aq_sysctl_itr_mode, "I",
+		"Interrupt moderation mode (0=off,1=on,-1=auto)");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "itr_tx",
+		CTLTYPE_INT | CTLFLAG_RW, softc, AQ_ITR_SYSCTL_TX,
+		aq_sysctl_itr, "I",
+		"Manual TX interrupt moderation delay in microseconds");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "itr_rx",
+		CTLTYPE_INT | CTLFLAG_RW, softc, AQ_ITR_SYSCTL_RX,
+		aq_sysctl_itr, "I",
+		"Manual RX interrupt moderation delay in microseconds");
 
 	{
 		struct sysctl_oid *filter_node;

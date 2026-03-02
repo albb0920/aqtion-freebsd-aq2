@@ -155,8 +155,10 @@ struct aq_hw {
 	uint16_t vendor_id;
 	uint8_t  revision_id;
 
-	/* Interrupt Moderation value. */
-	int itr;
+	/* Requested interrupt moderation configuration. */
+	int itr_mode;
+	uint16_t itr_tx;
+	uint16_t itr_rx;
 
 	/* Firmware-related stuff. */
 	aq_hw_fw_version fw_version;
@@ -204,6 +206,11 @@ struct aq_hw {
 #define HW_ATL_B0_RINGS_MAX 32U
 #define HW_ATL_B0_LRO_RXD_MAX 16U
 
+#define AQ_ITR_MODE_OFF		0
+#define AQ_ITR_MODE_ON		1
+#define AQ_ITR_MODE_AUTO	(-1)
+#define AQ_ITR_USEC_MAX		1022U
+
 #define AQ_HW_FW_SM_RAM        0x2U
 
 #define AQ_HW_MPI_STATE_MSK    0x00FFU
@@ -234,12 +241,16 @@ struct aq_hw {
 #define AQ_HW_CHIP_TPO2         0x00000002U
 #define AQ_HW_CHIP_RPF2         0x00000004U
 #define AQ_HW_CHIP_MPI_AQ       0x00000010U
+#define AQ_HW_CHIP_ATLANTIC     0x00400000U
 #define AQ_HW_CHIP_ANTIGUA      0x08000000U
 #define AQ_HW_CHIP_REVISION_A0  0x01000000U
 #define AQ_HW_CHIP_REVISION_B0  0x02000000U
 #define AQ_HW_CHIP_REVISION_B1  0x04000000U
 #define IS_CHIP_FEATURE(HW, _F_) (AQ_HW_CHIP_##_F_ & \
 	(HW)->chip_features)
+#define AQ_HW_IS_AQ1_A0(HW) \
+	(IS_CHIP_FEATURE((HW), ATLANTIC) && \
+	IS_CHIP_FEATURE((HW), REVISION_A0))
 #define AQ_HW_IS_AQ2(HW) (IS_CHIP_FEATURE((HW), ANTIGUA))
 
 static inline uint32_t
@@ -253,7 +264,7 @@ aq_hw_mtu_jumbo(const struct aq_hw *hw)
 {
 	if (AQ_HW_IS_AQ2(hw))
 		return HW_ATL2_MTU_JUMBO;
-	if (IS_CHIP_FEATURE(hw, REVISION_A0))
+	if (AQ_HW_IS_AQ1_A0(hw))
 		return HW_ATL_A0_MTU_JUMBO;
 	return HW_ATL_B0_MTU_JUMBO;
 }

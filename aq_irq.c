@@ -117,23 +117,34 @@ aq_update_hw_stats(aq_dev_t *aq_dev)
 	return (0);
 }
 
-
 void
 aq_if_update_admin_status(if_ctx_t ctx)
 {
 	aq_dev_t *aq_dev = iflib_get_softc(ctx);
 	struct aq_hw *hw = &aq_dev->hw;
+	if_t ifp = iflib_get_ifp(ctx);
+	bool link_changed;
+	uint32_t old_link_speed;
 	uint32_t link_speed;
 
 	//	AQ_DBG_ENTER();
 
 	struct aq_hw_fc_info fc_neg;
 	aq_hw_get_link_state(hw, &link_speed, &fc_neg);
-//	AQ_DBG_PRINT(" link_speed=%d aq_dev->linkup=%d", link_speed, aq_dev->linkup);
-	if (link_speed && !aq_dev->linkup) { /* link was DOWN */
-		device_printf(aq_dev->dev, "atlantic: link UP: speed=%d\n", link_speed);
+	old_link_speed = (uint32_t)(if_getbaudrate(ifp) / IF_Mbps(1));
+	link_changed = (link_speed != old_link_speed);
 
-		aq_dev->linkup = 1;
+	if (link_speed && (!aq_dev->linkup || link_changed)) {
+		if (!aq_dev->linkup) {
+			device_printf(aq_dev->dev,
+			    "atlantic: link UP: speed=%d\n", link_speed);
+		} else {
+			device_printf(aq_dev->dev,
+			    "atlantic: link speed change: %u -> %u\n",
+			    old_link_speed, link_speed);
+		}
+
+		aq_dev->linkup = true;
 
 #if __FreeBSD__ >= 12
 		/* Disable TSO if link speed < 1G */
@@ -144,9 +155,9 @@ aq_if_update_admin_status(if_ctx_t ctx)
 		    iflib_get_softc_ctx(ctx)->isc_capabilities |= (IFCAP_TSO4 | IFCAP_TSO6);
 		}
 #endif
+
 		/* turn on/off RX Pause in RPB */
 		rpb_rx_xoff_en_per_tc_set(hw, fc_neg.fc_rx, 0);
-
 
 		iflib_link_state_change(ctx, LINK_STATE_UP, IF_Mbps(link_speed));
 		aq_mediastatus_update(aq_dev, link_speed, &fc_neg);
@@ -156,7 +167,7 @@ aq_if_update_admin_status(if_ctx_t ctx)
 	} else if (link_speed == 0U && aq_dev->linkup) { /* link was UP */
 		device_printf(aq_dev->dev, "atlantic: link DOWN\n");
 
-		aq_dev->linkup = 0;
+		aq_dev->linkup = false;
 
 		/* turn off RX Pause in RPB */
 		rpb_rx_xoff_en_per_tc_set(hw, 0, 0);

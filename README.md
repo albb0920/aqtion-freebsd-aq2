@@ -2,6 +2,30 @@
 
 Atlantic driver for FreeBSD
 
+## Interrupt moderation
+
+The driver exposes per-device interrupt moderation controls under
+`dev.aq.N`:
+
+```
+sysctl dev.aq.0.itr_mode=-1   # auto
+sysctl dev.aq.0.itr_mode=1    # manual
+sysctl dev.aq.0.itr_tx=128
+sysctl dev.aq.0.itr_rx=96
+sysctl dev.aq.0.itr_mode=0    # off
+```
+
+Modes:
+- `0` disables interrupt moderation.
+- `1` enables manual interrupt moderation using `itr_tx` and `itr_rx`.
+- `-1` selects the built-in automatic profile from link speed.
+
+`itr_tx` and `itr_rx` are manual maximum delay values in microseconds and
+accept `0..1022`.
+
+On A0 hardware the manual TX/RX settings are coupled internally, so writing
+either `itr_tx` or `itr_rx` updates both values.
+
 ## RX filter sysctls
 
 The driver exposes software-managed RX filter tables under `dev.aq.N.rx_filter`.
