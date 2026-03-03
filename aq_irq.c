@@ -58,10 +58,10 @@ __FBSDID("$FreeBSD$");
 int
 aq_update_hw_stats(aq_dev_t *aq_dev)
 {
-    struct aq_hw *hw = &aq_dev->hw;
-    struct aq_hw_fw_mbox mbox;
-    bool aq2_b0 = AQ_HW_IS_AQ2(hw) &&
-        hw->aq2_iface_ver == AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0;
+	struct aq_hw *hw = &aq_dev->hw;
+	struct aq_hw_fw_mbox mbox;
+	bool aq2_b0 = AQ_HW_IS_AQ2(hw) &&
+	    hw->aq2_iface_ver == AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0;
 	aq_hw_mpi_read_stats(hw, &mbox);
 
 #define AQ_SDELTA(_N_) (aq_dev->curr_stats._N_ += \

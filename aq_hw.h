@@ -169,18 +169,18 @@ struct aq_hw {
 
 	bool lro_enabled;
 
-    uint32_t mbox_addr;
-    struct aq_hw_fw_mbox mbox;
-    uint32_t rpc_addr;
-    uint16_t rpc_tid;
-    uint16_t rpc_len;
-    uint8_t rpc_buf[AQ_FW_RPC_MAX];
-    uint32_t settings_addr;
+	uint32_t mbox_addr;
+	struct aq_hw_fw_mbox mbox;
+	uint32_t rpc_addr;
+	uint16_t rpc_tid;
+	uint16_t rpc_len;
+	uint8_t rpc_buf[AQ_FW_RPC_MAX];
+	uint32_t settings_addr;
 
-    uint32_t art_base_index;
-    uint8_t aq2_iface_ver;
-    uint32_t wol_flags;
-    uint32_t eee_rate;
+	uint32_t art_base_index;
+	uint8_t aq2_iface_ver;
+	uint32_t wol_flags;
+	uint32_t eee_rate;
 };
 
 #define aq_hw_s aq_hw
@@ -239,7 +239,7 @@ struct aq_hw {
 #define AQ_HW_CHIP_REVISION_B0  0x02000000U
 #define AQ_HW_CHIP_REVISION_B1  0x04000000U
 #define IS_CHIP_FEATURE(HW, _F_) (AQ_HW_CHIP_##_F_ & \
-    (HW)->chip_features)
+	(HW)->chip_features)
 #define AQ_HW_IS_AQ2(HW) (IS_CHIP_FEATURE((HW), ANTIGUA))
 
 static inline uint32_t
@@ -368,7 +368,8 @@ int aq_hw_get_link_state(struct aq_hw *hw, uint32_t *link_speed,
 int aq_hw_set_link_speed(struct aq_hw *hw, uint32_t speed);
 
 int aq_hw_fw_downld_dwords(struct aq_hw *hw, uint32_t a, uint32_t *p, uint32_t cnt);
-int aq_hw_fw_upload_dwords(struct aq_hw *hw, uint32_t a, const uint32_t *p, uint32_t cnt);
+int aq_hw_fw_upload_dwords(struct aq_hw *hw, uint32_t a, const uint32_t *p,
+    uint32_t cnt);
 int aq_hw_reset(struct aq_hw *hw);
 
 int aq_hw_mpi_create(struct aq_hw *hw);
@@ -396,14 +397,15 @@ int aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c);
 int aq_hw_get_cable_len(struct aq_hw *hw, uint8_t *len);
 int aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4]);
 int aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate);
-int aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported, uint32_t *lp_rate);
+int aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate,
+    uint32_t *supported, uint32_t *lp_rate);
 
 int aq_hw_err_from_flags(struct aq_hw *hw);
 
 int hw_atl_b0_hw_vlan_promisc_set(struct aq_hw_s *self, bool promisc);
 
 int hw_atl_b0_hw_vlan_set(struct aq_hw_s *self,
-                  struct aq_rx_filter_vlan *aq_vlans);
+    struct aq_rx_filter_vlan *aq_vlans);
 int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans);
 int aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc);
 

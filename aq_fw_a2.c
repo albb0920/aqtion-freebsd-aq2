@@ -121,15 +121,24 @@ extern const struct aq_firmware_ops aq_fw_a2_ops;
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10M_HD	(1u << 5)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_LINK_UP	(1u << 0)
 
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_REG				0x12a58u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_QUEUE_OR_TC		0x00800000u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_RX_QUEUE_TC_INDEX	0x007c0000u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_ACCEPT		0x00010000u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_QUEUE_OR_TC		0x00008000u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_RX_QUEUE_TC_INDEX	0x00007c00u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_ACCEPT		0x00000100u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_PROMISC_QUEUE_OR_TC		0x00000080u
-#define  AQ2_FW_INTERFACE_IN_REQUEST_POLICY_PROMISC_RX_QUEUE_TX_INDEX	0x0000007cu
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_REG \
+	0x12a58u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_QUEUE_OR_TC \
+	0x00800000u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_RX_QUEUE_TC_INDEX \
+	0x007c0000u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_ACCEPT \
+	0x00010000u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_QUEUE_OR_TC \
+	0x00008000u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_RX_QUEUE_TC_INDEX \
+	0x00007c00u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_ACCEPT \
+	0x00000100u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_PROMISC_QUEUE_OR_TC \
+	0x00000080u
+#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_PROMISC_RX_QUEUE_TX_INDEX \
+	0x0000007cu
 
 #define AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_REG	0x13000u
 #define AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_B	0xffff0000u
@@ -519,13 +528,17 @@ static void aq2_stats_from_b0(struct aq_hw *hw, struct aq_hw_stats_s *stats,
 	uint64_t tx_good_oct = le64toh(b0->tx_good_octets);
 
 	uint32_t rx_uc_frames = aq2_u64_to_u32(le64toh(b0->rx_unicast_frames));
-	uint32_t rx_mc_frames = aq2_u64_to_u32(le64toh(b0->rx_multicast_frames));
-	uint32_t rx_bc_frames = aq2_u64_to_u32(le64toh(b0->rx_broadcast_frames));
+	uint32_t rx_mc_frames =
+	    aq2_u64_to_u32(le64toh(b0->rx_multicast_frames));
+	uint32_t rx_bc_frames =
+	    aq2_u64_to_u32(le64toh(b0->rx_broadcast_frames));
 	uint32_t rx_errs = aq2_u64_to_u32(le64toh(b0->rx_errors));
 
 	uint32_t tx_uc_frames = aq2_u64_to_u32(le64toh(b0->tx_unicast_frames));
-	uint32_t tx_mc_frames = aq2_u64_to_u32(le64toh(b0->tx_multicast_frames));
-	uint32_t tx_bc_frames = aq2_u64_to_u32(le64toh(b0->tx_broadcast_frames));
+	uint32_t tx_mc_frames =
+	    aq2_u64_to_u32(le64toh(b0->tx_multicast_frames));
+	uint32_t tx_bc_frames =
+	    aq2_u64_to_u32(le64toh(b0->tx_broadcast_frames));
 	uint32_t tx_errs = aq2_u64_to_u32(le64toh(b0->tx_errors));
 
 	stats->uprc = rx_uc_frames;
@@ -551,7 +564,8 @@ static void aq2_stats_from_b0(struct aq_hw *hw, struct aq_hw_stats_s *stats,
 	stats->dpc = reg_rx_dma_stat_counter7get(hw);
 }
 
-static int aq2_interface_buffer_read(struct aq_hw *hw, uint32_t reg0, uint32_t *data0,
+static int
+aq2_interface_buffer_read(struct aq_hw *hw, uint32_t reg0, uint32_t *data0,
     uint32_t size0)
 {
 	uint32_t tid0;
@@ -582,8 +596,8 @@ static int aq2_interface_buffer_read(struct aq_hw *hw, uint32_t reg0, uint32_t *
 	}
 
 	if (timo == 0)
-		return -ETIMEDOUT;
-	return 0;
+		return (-ETIMEDOUT);
+	return (0);
 }
 
 static int aq2_fw_wait_shared_ack(struct aq_hw *hw)
@@ -597,11 +611,11 @@ static int aq2_fw_wait_shared_ack(struct aq_hw *hw)
 	for (timo = 100000; timo > 0; --timo) {
 		v = AQ_READ_REG(hw, AQ2_MIF_HOST_FINISHED_STATUS_READ_REG);
 		if ((v & AQ2_MIF_HOST_FINISHED_STATUS_ACK) == 0)
-			return 0;
+			return (0);
 		usec_delay(100);
 	}
 
-	return -ETIMEDOUT;
+	return (-ETIMEDOUT);
 }
 
 int aq2_fw_reboot(struct aq_hw *hw)
@@ -624,7 +638,7 @@ int aq2_fw_reboot(struct aq_hw *hw)
 		usec_delay(10);
 	}
 	if (timo == 0)
-		return -ETIMEDOUT;
+		return (-ETIMEDOUT);
 
 	for (timo = 2000000; timo > 0; --timo) {
 		v = AQ_READ_REG(hw, AQ2_MIF_BOOT_REG);
@@ -637,20 +651,20 @@ int aq2_fw_reboot(struct aq_hw *hw)
 		usec_delay(10);
 	}
 	if (timo == 0)
-		return -ETIMEDOUT;
+		return (-ETIMEDOUT);
 
 	v = AQ_READ_REG(hw, AQ2_MIF_BOOT_REG);
 	if (v & AQ2_MIF_BOOT_FW_INIT_FAILED)
-		return -ETIMEDOUT;
+		return (-ETIMEDOUT);
 
 	v = AQ_READ_REG(hw, AQ2_MCP_HOST_REQ_INT_REG);
 	if (v & AQ2_MCP_HOST_REQ_INT_READY)
-		return -ENXIO;
+		return (-ENXIO);
 
 	err = aq2_interface_buffer_read(hw,
 	    AQ2_FW_INTERFACE_OUT_VERSION_BUNDLE_REG, &v, sizeof(v));
 	if (err != 0)
-		return err;
+		return (err);
 
 	hw->fw_version.raw =
 	    (((v & AQ2_FW_INTERFACE_OUT_VERSION_MAJOR) >>
@@ -664,12 +678,13 @@ int aq2_fw_reboot(struct aq_hw *hw)
 	err = aq2_interface_buffer_read(hw,
 	    AQ2_FW_INTERFACE_OUT_VERSION_IFACE_REG, &v, sizeof(v));
 	if (err != 0)
-		return err;
+		return (err);
 
 	switch (v & AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER) {
 	case AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_A0:
 	case AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0:
-		hw->aq2_iface_ver = (uint8_t)(v & AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER);
+		hw->aq2_iface_ver =
+		    (uint8_t)(v & AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER);
 		break;
 	default:
 		hw->aq2_iface_ver = AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_A0;
@@ -680,16 +695,17 @@ int aq2_fw_reboot(struct aq_hw *hw)
 	    AQ2_FW_INTERFACE_OUT_FILTER_CAPS_REG, filter_caps,
 	    sizeof(filter_caps));
 	if (err != 0)
-		return err;
+		return (err);
 
 	hw->art_base_index = ((filter_caps[2] &
 	    AQ2_FW_INTERFACE_OUT_FILTER_CAPS3_RESOLVER_BASE_INDEX) >>
 	    AQ2_FW_INTERFACE_OUT_FILTER_CAPS3_RESOLVER_BASE_INDEX_SHIFT) * 8;
 
-	return 0;
+	return (0);
 }
 
-static int aq2_fw_reset(struct aq_hw *hw)
+static int
+aq2_fw_reset(struct aq_hw *hw)
 {
 	uint32_t v;
 	int err;
@@ -713,10 +729,11 @@ static int aq2_fw_reset(struct aq_hw *hw)
 	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_REQUEST_POLICY_REG, v);
 
 	err = aq2_fw_wait_shared_ack(hw);
-	return err;
+	return (err);
 }
 
-static int aq2_fw_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
+static int
+aq2_fw_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
 {
 	uint32_t mac_addr[2];
 	int err;
@@ -724,16 +741,16 @@ static int aq2_fw_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
 	err = aq2_interface_buffer_read(hw, AQ2_FW_INTERFACE_IN_MAC_ADDRESS_REG,
 	    mac_addr, sizeof(mac_addr));
 	if (err != 0)
-		return err;
+		return (err);
 
 	if (mac_addr[0] == 0 && mac_addr[1] == 0)
-		return -ENXIO;
+		return (-ENXIO);
 
 	mac_addr[0] = htole32(mac_addr[0]);
 	mac_addr[1] = htole32(mac_addr[1]);
 	memcpy(mac, (uint8_t *)mac_addr, ETHER_ADDR_LEN);
 
-	return 0;
+	return (0);
 }
 
 static int aq2_fw_set_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e mode,
@@ -811,10 +828,11 @@ static int aq2_fw_set_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e mode,
 	}
 
 	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG, v);
-	return aq2_fw_wait_shared_ack(hw);
+	return (aq2_fw_wait_shared_ack(hw));
 }
 
-static int aq2_fw_get_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e *mode,
+static int
+aq2_fw_get_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e *mode,
     aq_fw_link_speed_t *speed, aq_fw_link_fc_t *fc)
 {
 	uint32_t v;
@@ -860,39 +878,55 @@ static int aq2_fw_get_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e *mode,
 	if (fc)
 		*fc = fc_val;
 
-	return 0;
+	return (0);
 }
 
-static int aq2_fw_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
+static int
+aq2_fw_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
 {
 	union aq2_stats_buf stats_buf;
+	uint32_t rx_uc_frames;
+	uint32_t rx_mc_frames;
+	uint32_t rx_bc_frames;
+	uint32_t rx_errs;
+	uint32_t tx_uc_frames;
+	uint32_t tx_mc_frames;
+	uint32_t tx_bc_frames;
+	uint32_t tx_errs;
+	uint32_t rx_uc_oct;
+	uint32_t rx_bc_oct;
+	uint32_t rx_total_oct;
+	uint32_t tx_uc_oct;
+	uint32_t tx_mc_oct;
+	uint32_t tx_bc_oct;
+	uint32_t rx_mc_oct = 0;
 	int err;
 
 	err = aq2_interface_buffer_read(hw, AQ2_FW_INTERFACE_OUT_STATS_REG,
 	    stats_buf.raw, sizeof(stats_buf));
 	if (err == 0) {
-		if (hw->aq2_iface_ver == AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0)
+		if (hw->aq2_iface_ver ==
+		    AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0)
 			aq2_stats_from_b0(hw, stats, &stats_buf.b0);
 		else
 			aq2_stats_from_a0(hw, stats, &stats_buf.a0);
-		return 0;
+		return (0);
 	}
 
-	uint32_t rx_uc_frames = reg_mac_msm_rx_ucst_frm_cnt_get(hw);
-	uint32_t rx_mc_frames = reg_mac_msm_rx_mcst_frm_cnt_get(hw);
-	uint32_t rx_bc_frames = reg_mac_msm_rx_bcst_frm_cnt_get(hw);
-	uint32_t rx_errs = reg_mac_msm_rx_errs_cnt_get(hw);
-	uint32_t tx_uc_frames = reg_mac_msm_tx_ucst_frm_cnt_get(hw);
-	uint32_t tx_mc_frames = reg_mac_msm_tx_mcst_frm_cnt_get(hw);
-	uint32_t tx_bc_frames = reg_mac_msm_tx_bcst_frm_cnt_get(hw);
-	uint32_t tx_errs = reg_mac_msm_tx_errs_cnt_get(hw);
-	uint32_t rx_uc_oct = reg_mac_msm_rx_ucst_octets_counter0get(hw);
-	uint32_t rx_bc_oct = reg_mac_msm_rx_bcst_octets_counter1get(hw);
-	uint32_t rx_total_oct = stats_rx_dma_good_octet_counterlsw_get(hw);
-	uint32_t tx_uc_oct = reg_mac_msm_tx_ucst_octets_counter0get(hw);
-	uint32_t tx_mc_oct = reg_mac_msm_tx_mcst_octets_counter1get(hw);
-	uint32_t tx_bc_oct = reg_mac_msm_tx_bcst_octets_counter1get(hw);
-	uint32_t rx_mc_oct = 0;
+	rx_uc_frames = reg_mac_msm_rx_ucst_frm_cnt_get(hw);
+	rx_mc_frames = reg_mac_msm_rx_mcst_frm_cnt_get(hw);
+	rx_bc_frames = reg_mac_msm_rx_bcst_frm_cnt_get(hw);
+	rx_errs = reg_mac_msm_rx_errs_cnt_get(hw);
+	tx_uc_frames = reg_mac_msm_tx_ucst_frm_cnt_get(hw);
+	tx_mc_frames = reg_mac_msm_tx_mcst_frm_cnt_get(hw);
+	tx_bc_frames = reg_mac_msm_tx_bcst_frm_cnt_get(hw);
+	tx_errs = reg_mac_msm_tx_errs_cnt_get(hw);
+	rx_uc_oct = reg_mac_msm_rx_ucst_octets_counter0get(hw);
+	rx_bc_oct = reg_mac_msm_rx_bcst_octets_counter1get(hw);
+	rx_total_oct = stats_rx_dma_good_octet_counterlsw_get(hw);
+	tx_uc_oct = reg_mac_msm_tx_ucst_octets_counter0get(hw);
+	tx_mc_oct = reg_mac_msm_tx_mcst_octets_counter1get(hw);
+	tx_bc_oct = reg_mac_msm_tx_bcst_octets_counter1get(hw);
 
 	if (rx_total_oct >= (rx_uc_oct + rx_bc_oct))
 		rx_mc_oct = rx_total_oct - rx_uc_oct - rx_bc_oct;
@@ -919,7 +953,7 @@ static int aq2_fw_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
 	stats->prc = rx_uc_frames + rx_mc_frames + rx_bc_frames;
 	stats->dpc = reg_rx_dma_stat_counter7get(hw);
 
-	return 0;
+	return (0);
 }
 
 int aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
@@ -954,10 +988,11 @@ int aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 	    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE, 0,
 	    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_SLEEP_PROXY);
 
-	return aq2_fw_wait_shared_ack(hw);
+	return (aq2_fw_wait_shared_ack(hw));
 }
 
-static int aq2_fw_get_phy_temp(struct aq_hw *hw, int *temp_c)
+static int
+aq2_fw_get_phy_temp(struct aq_hw *hw, int *temp_c)
 {
 	struct aq2_phy_health_monitor phy;
 	uint32_t data[2];
@@ -965,21 +1000,22 @@ static int aq2_fw_get_phy_temp(struct aq_hw *hw, int *temp_c)
 	int err;
 
 	if (temp_c == NULL)
-		return -EINVAL;
+		return (-EINVAL);
 
 	reg = AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_REG +
 	    (uint32_t)offsetof(struct aq2_fw_interface_out_prefix,
 	    phy_health_monitor);
 	err = aq2_interface_buffer_read(hw, reg, data, sizeof(data));
 	if (err != 0)
-		return err;
+		return (err);
 
 	memcpy(&phy, data, sizeof(phy));
 	*temp_c = (int)(int8_t)phy.phy_temperature;
-	return 0;
+	return (0);
 }
 
-static uint32_t aq2_eee_mask_from_caps(const struct aq2_device_link_caps *caps)
+static uint32_t
+aq2_eee_mask_from_caps(const struct aq2_device_link_caps *caps)
 {
 	uint32_t rate = 0;
 
@@ -994,10 +1030,11 @@ static uint32_t aq2_eee_mask_from_caps(const struct aq2_device_link_caps *caps)
 	if (caps->eee_100M)
 		rate |= AQ_EEE_100M;
 
-	return rate;
+	return (rate);
 }
 
-static uint32_t aq2_eee_mask_from_lkp(const struct aq2_lkp_link_caps *caps)
+static uint32_t
+aq2_eee_mask_from_lkp(const struct aq2_lkp_link_caps *caps)
 {
 	uint32_t rate = 0;
 
@@ -1012,7 +1049,7 @@ static uint32_t aq2_eee_mask_from_lkp(const struct aq2_lkp_link_caps *caps)
 	if (caps->eee_100M)
 		rate |= AQ_EEE_100M;
 
-	return rate;
+	return (rate);
 }
 
 static uint32_t aq2_eee_mask_from_link_options(uint32_t v)
@@ -1030,10 +1067,11 @@ static uint32_t aq2_eee_mask_from_link_options(uint32_t v)
 	if (v & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M)
 		rate |= AQ_EEE_100M;
 
-	return rate;
+	return (rate);
 }
 
-static int aq2_fw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
+static int
+aq2_fw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 {
 	uint32_t v;
 
@@ -1056,10 +1094,12 @@ static int aq2_fw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M;
 
 	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG, v);
-	return aq2_fw_wait_shared_ack(hw);
+	return (aq2_fw_wait_shared_ack(hw));
 }
 
-static int aq2_fw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported, uint32_t *lp_rate)
+static int
+aq2_fw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
+    uint32_t *lp_rate)
 {
 	struct aq2_device_link_caps dev_caps;
 	struct aq2_lkp_link_caps lkp_caps;
@@ -1086,7 +1126,8 @@ static int aq2_fw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *suppo
 
 	if (lp_rate) {
 		reg = AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_REG +
-		    (uint32_t)offsetof(struct aq2_fw_interface_out_caps, lkp_link_caps);
+		    (uint32_t)offsetof(struct aq2_fw_interface_out_caps,
+		    lkp_link_caps);
 		err = aq2_interface_buffer_read(hw, reg, (uint32_t *)&lkp_caps,
 		    sizeof(lkp_caps));
 		if (err == 0)
@@ -1095,7 +1136,7 @@ static int aq2_fw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *suppo
 			*lp_rate = 0;
 	}
 
-	return 0;
+	return (0);
 }
 
 const struct aq_firmware_ops aq_fw_a2_ops = {

@@ -172,14 +172,15 @@ aq_hw_err_from_flags(struct aq_hw *hw)
 	return (0);
 }
 
-static int aq2_filter_art_set(struct aq_hw *hw, uint32_t idx, uint32_t tag, uint32_t mask,
-	uint32_t action)
+static int
+aq2_filter_art_set(struct aq_hw *hw, uint32_t idx, uint32_t tag,
+    uint32_t mask, uint32_t action)
 {
 	int timo;
 	uint32_t sem;
 
 	if (!AQ_HW_IS_AQ2(hw))
-	    return (0);
+		return (0);
 
 	for (timo = 1000; timo > 0; --timo) {
 	    sem = AQ_READ_REG(hw, AQ2_ART_SEM_REG);
@@ -263,7 +264,9 @@ err_exit:
 	return (err);
 }
 
-int aq_hw_fw_upload_dwords(struct aq_hw *hw, uint32_t a, const uint32_t *p, uint32_t cnt)
+int
+aq_hw_fw_upload_dwords(struct aq_hw *hw, uint32_t a, const uint32_t *p,
+    uint32_t cnt)
 {
 	int err = 0;
 
@@ -272,26 +275,28 @@ int aq_hw_fw_upload_dwords(struct aq_hw *hw, uint32_t a, const uint32_t *p, uint
 	                   1U, 10000U);
 
 	if (err < 0) {
-	    bool is_locked;
+		bool is_locked;
 
-	    reg_glb_cpu_sem_set(hw, 1U, AQ_HW_FW_SM_RAM);
-	    is_locked = reg_glb_cpu_sem_get(hw, AQ_HW_FW_SM_RAM);
-	    if (!is_locked) {
-	        err = -ETIME;
-	        goto err_exit;
-	    }
+		reg_glb_cpu_sem_set(hw, 1U, AQ_HW_FW_SM_RAM);
+		is_locked = reg_glb_cpu_sem_get(hw, AQ_HW_FW_SM_RAM);
+		if (!is_locked) {
+			err = -ETIME;
+			goto err_exit;
+		}
 	}
 
 	mif_mcp_up_mailbox_addr_set(hw, a);
 
 	for (++cnt; --cnt && !err;) {
-	    mif_mcp_up_mailbox_data_set(hw, *(p++));
-	    mif_mcp_up_mailbox_execute_operation_set(hw, 1);
+		mif_mcp_up_mailbox_data_set(hw, *(p++));
+		mif_mcp_up_mailbox_execute_operation_set(hw, 1);
 
-	    if (IS_CHIP_FEATURE(hw, REVISION_B1))
-	        AQ_HW_WAIT_FOR(a != mif_mcp_up_mailbox_addr_get(hw), 1U, 1000U);
-	    else
-	        AQ_HW_WAIT_FOR(!mif_mcp_up_mailbox_busy_get(hw), 1, 1000U);
+		if (IS_CHIP_FEATURE(hw, REVISION_B1))
+			AQ_HW_WAIT_FOR(a != mif_mcp_up_mailbox_addr_get(hw),
+			    1U, 1000U);
+		else
+			AQ_HW_WAIT_FOR(!mif_mcp_up_mailbox_busy_get(hw), 1,
+			    1000U);
 	}
 
 	reg_glb_cpu_sem_set(hw, 1U, AQ_HW_FW_SM_RAM);
@@ -322,12 +327,14 @@ aq_hw_init_ucp(struct aq_hw *hw)
 	AQ_DBG_ENTER();
 
 	if (AQ_HW_IS_AQ2(hw)) {
-	    err = aq2_fw_reboot(hw);
-	    if (err != EOK) {
-	        aq_log_error("aq_hw_init_ucp(): A2 F/W reboot failed, err %d", err);
-	        return (err);
-	    }
-	    return (EOK);
+		err = aq2_fw_reboot(hw);
+		if (err != EOK) {
+			aq_log_error(
+			    "aq_hw_init_ucp(): A2 F/W reboot failed, err %d",
+			    err);
+			return (err);
+		}
+		return (EOK);
 	}
 
 	hw->fw_version.raw = 0;
@@ -361,14 +368,15 @@ aq_hw_init_ucp(struct aq_hw *hw)
 	/* check 10 times by 1ms */
 	AQ_HW_WAIT_FOR((hw->mbox_addr = AQ_READ_REG(hw, 0x360)) != 0, 400U, 20);
 	if (hw->fw_version.major_version >= 2)
-	    AQ_HW_WAIT_FOR((hw->rpc_addr = AQ_READ_REG(hw, AQ_HW_MPI_RPC_ADDR)) != 0,
-	        400U, 20);
+		AQ_HW_WAIT_FOR(
+		    (hw->rpc_addr = AQ_READ_REG(hw, AQ_HW_MPI_RPC_ADDR)) != 0,
+		    400U, 20);
 	else
-	    hw->rpc_addr = 0;
+		hw->rpc_addr = 0;
 	if (hw->fw_version.major_version >= 2)
-	    fw2x_read_settings_addr(hw);
+		fw2x_read_settings_addr(hw);
 	else
-	    hw->settings_addr = 0;
+		hw->settings_addr = 0;
 	aq_hw_fw_version ver_expected = { .raw = AQ_CFG_FW_MIN_VER_EXPECTED };
 	if (!aq_hw_ver_match(&ver_expected, &hw->fw_version))
 	        aq_log_error("atlantic: aq_hw_init_ucp(), wrong FW version: expected:%x actual:%x",
@@ -568,28 +576,28 @@ aq_hw_set_power(struct aq_hw *hw, unsigned int power_state)
 int aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c)
 {
 	if (hw->fw_ops && hw->fw_ops->get_phy_temp)
-	    return hw->fw_ops->get_phy_temp(hw, temp_c);
+		return (hw->fw_ops->get_phy_temp(hw, temp_c));
 	return (-ENOTSUP);
 }
 
 int aq_hw_get_cable_len(struct aq_hw *hw, uint8_t *len)
 {
 	if (hw->fw_ops && hw->fw_ops->get_cable_len)
-	    return hw->fw_ops->get_cable_len(hw, len);
+		return (hw->fw_ops->get_cable_len(hw, len));
 	return (-ENOTSUP);
 }
 
 int aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4])
 {
 	if (hw->fw_ops && hw->fw_ops->get_cable_diag)
-	    return hw->fw_ops->get_cable_diag(hw, lane_data);
+		return (hw->fw_ops->get_cable_diag(hw, lane_data));
 	return (-ENOTSUP);
 }
 
 int aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 {
 	if (hw->fw_ops && hw->fw_ops->set_eee_rate)
-	    return hw->fw_ops->set_eee_rate(hw, rate);
+		return (hw->fw_ops->set_eee_rate(hw, rate));
 	return (-ENOTSUP);
 }
 
@@ -597,7 +605,7 @@ int aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
 	uint32_t *lp_rate)
 {
 	if (hw->fw_ops && hw->fw_ops->get_eee_rate)
-	    return hw->fw_ops->get_eee_rate(hw, rate, supported, lp_rate);
+		return (hw->fw_ops->get_eee_rate(hw, rate, supported, lp_rate));
 	return (-ENOTSUP);
 }
 
@@ -843,10 +851,10 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 	/* Multicast filters */
 	{
 	    uint32_t mac_max = aq_hw_mac_max(hw);
-	    for (i = mac_max; i--;) {
-	    rpfl2_uc_flr_en_set(hw, (i == 0U) ? 1U : 0U, i);
-	    rpfl2unicast_flr_act_set(hw, 1U, i);
-	    }
+		for (i = mac_max; i--;) {
+			rpfl2_uc_flr_en_set(hw, (i == 0U) ? 1U : 0U, i);
+			rpfl2unicast_flr_act_set(hw, 1U, i);
+		}
 	}
 	reg_rx_flr_mcst_flr_msk_set(hw, 0x00000000U);
 	reg_rx_flr_mcst_flr_set(hw, 0x00010FFFU, 0U);
@@ -861,12 +869,12 @@ aq_hw_init_rx_path(struct aq_hw *hw)
 
 	/* misc */
 	if (!AQ_HW_IS_AQ2(hw)) {
-	    control_reg_val = 0x000F0000U; //RPF2
+		control_reg_val = 0x000F0000U; /* RPF2 */
 
-	    /* RSS hash type set for IP/TCP */
-	    control_reg_val |= 0x1EU;
+		/* RSS hash type set for IP/TCP */
+		control_reg_val |= 0x1EU;
 
-	    AQ_WRITE_REG(hw, 0x00005040U, control_reg_val);
+		AQ_WRITE_REG(hw, 0x00005040U, control_reg_val);
 	}
 
 	rpfl2broadcast_en_set(hw, 1U);
@@ -1140,7 +1148,8 @@ hw_atl_b0_hw_vlan_promisc_set(struct aq_hw_s *self, bool promisc)
 	return aq_hw_err_from_flags(self);
 }
 
-static void aq2_rpf_vlan_tag_set(struct aq_hw_s *self, uint32_t tag, uint32_t filter)
+static void
+aq2_rpf_vlan_tag_set(struct aq_hw_s *self, uint32_t tag, uint32_t filter)
 {
 	AQ_WRITE_REG_BIT(self, AQ2_RPF_VL_TAG_REG(filter),
 	    AQ2_RPF_VL_TAG_MSK, AQ2_RPF_VL_TAG_SHIFT, tag);
@@ -1160,7 +1169,7 @@ int aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc)
 	aq2_filter_art_set(self, AQ2_RPF_INDEX_VLAN_PROMISC_OFF, 0,
 	    AQ2_RPF_TAG_VLAN_MASK | AQ2_RPF_TAG_UNTAG_MASK, action);
 
-	return aq_hw_err_from_flags(self);
+	return (aq_hw_err_from_flags(self));
 }
 
 int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)
@@ -1201,7 +1210,7 @@ int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)
 		}
 	}
 
-	return aq_hw_err_from_flags(self);
+	return (aq_hw_err_from_flags(self));
 }
 
 static void aq_hw_l2_route_set(struct aq_hw *hw,
@@ -1240,7 +1249,7 @@ int aq_hw_filter_l2_set(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 		return (-ENOTSUP);
 
 	aq_hw_l2_filter_write(hw, data, true);
-	return aq_hw_err_from_flags(hw);
+	return (aq_hw_err_from_flags(hw));
 }
 
 int aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
@@ -1249,7 +1258,7 @@ int aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 		return (-ENOTSUP);
 
 	aq_hw_l2_filter_write(hw, data, false);
-	return aq_hw_err_from_flags(hw);
+	return (aq_hw_err_from_flags(hw));
 }
 
 static void aq_hw_l3l4_slot_clear(struct aq_hw *hw, uint8_t location)
@@ -1318,7 +1327,7 @@ int aq_hw_filter_l3l4_clear(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
 		return (-ENOTSUP);
 
 	aq_hw_l3l4_rule_clear(hw, data);
-	return aq_hw_err_from_flags(hw);
+	return (aq_hw_err_from_flags(hw));
 }
 
 int aq_hw_filter_l3l4_set(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
@@ -1337,7 +1346,7 @@ int aq_hw_filter_l3l4_set(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
 	aq_hw_l3l4_ports_set(hw, data);
 	hw_atl_rpfl3l4_cmd_set(hw, data->location, data->cmd);
 
-	return aq_hw_err_from_flags(hw);
+	return (aq_hw_err_from_flags(hw));
 }
 
 
