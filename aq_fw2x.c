@@ -396,7 +396,7 @@ int fw2x_get_mode(struct aq_hw* hw, enum aq_hw_fw_mpi_state_e* mode,
     aq_fw_link_speed_t* speed, aq_fw_link_fc_t* fc);
 
 int fw2x_get_mac_addr(struct aq_hw* hw, uint8_t* mac);
-int fw2x_get_stats(struct aq_hw* hw, struct aq_hw_stats_s* stats);
+int fw2x_get_stats(struct aq_hw* hw, struct aq_stats_s* stats);
 int fw2x_get_phy_temp(struct aq_hw *hw, int *temp_c);
 int fw2x_get_cable_len(struct aq_hw *hw, uint8_t *len);
 int fw2x_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4]);
@@ -805,25 +805,25 @@ fw2x_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
 }
 
 static inline void
-fw2x_stats_to_fw_stats_(struct aq_hw_stats_s *dst,
+fw2x_stats_from_msm(struct aq_stats_s *dst,
     const fw2x_msm_statistics *src)
 {
-	dst->uprc = src->uprc;
-	dst->mprc = src->mprc;
-	dst->bprc = src->bprc;
-	dst->erpt = src->erpt;
-	dst->uptc = src->uptc;
-	dst->mptc = src->mptc;
-	dst->bptc = src->bptc;
-	dst->erpr = src->erpr;
-	dst->mbtc = src->mbtc;
-	dst->bbtc = src->bbtc;
-	dst->mbrc = src->mbrc;
-	dst->bbrc = src->bbrc;
-	dst->ubrc = src->ubrc;
-	dst->ubtc = src->ubtc;
-	dst->ptc = src->ptc;
-	dst->prc = src->prc;
+	dst->ucast_pkts_rcvd = src->uprc;
+	dst->mcast_pkts_rcvd = src->mprc;
+	dst->bcast_pkts_rcvd = src->bprc;
+	dst->err_pkts_txd = src->erpt;
+	dst->ucast_pkts_txd = src->uptc;
+	dst->mcast_pkts_txd = src->mptc;
+	dst->bcast_pkts_txd = src->bptc;
+	dst->err_pkts_rcvd = src->erpr;
+	dst->mcast_octets_txd = src->mbtc;
+	dst->bcast_octets_txd = src->bbtc;
+	dst->mcast_octets_rcvd = src->mbrc;
+	dst->bcast_octets_rcvd = src->bbrc;
+	dst->ucast_octets_rcvd = src->ubrc;
+	dst->ucast_octets_txd = src->ubtc;
+	dst->good_pkts_txd = src->ptc;
+	dst->good_pkts_rcvd = src->prc;
 }
 
 
@@ -872,7 +872,7 @@ toggle_mpi_ctrl_and_wait_(struct aq_hw *hw, uint64_t mask,
 
 
 int
-fw2x_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
+fw2x_get_stats(struct aq_hw *hw, struct aq_stats_s *stats)
 {
 	int err = 0;
 	fw2x_msm_statistics fw2x_stats = {0};
@@ -896,7 +896,7 @@ fw2x_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
 		(uint32_t *)&fw2x_stats,
 		sizeof(fw2x_stats) / sizeof(uint32_t));
 
-	fw2x_stats_to_fw_stats_(stats, &fw2x_stats);
+	fw2x_stats_from_msm(stats, &fw2x_stats);
 
 	if (err != EOK)
 		trace_error(dbg_fw,

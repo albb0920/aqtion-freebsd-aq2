@@ -627,21 +627,23 @@ err_exit:
 }
 
 int
-aq_hw_mpi_read_stats(struct aq_hw *hw, struct aq_hw_fw_mbox *pmbox)
+aq_hw_mpi_read_stats(struct aq_hw *hw, struct aq_stats_s *stats)
 {
 	int err = 0;
 //    AQ_DBG_ENTER();
 
+	memset(stats, 0, sizeof(*stats));
+
 	if (hw->fw_ops && hw->fw_ops->get_stats) {
-		err = hw->fw_ops->get_stats(hw, &pmbox->stats);
+		err = hw->fw_ops->get_stats(hw, stats);
 	} else {
 		err = -ENOTSUP;
 		aq_log_error("get_stats() not supported by F/W");
 	}
 
 	if (err == EOK) {
-		pmbox->stats.dpc = reg_rx_dma_stat_counter7get(hw);
-		pmbox->stats.cprc = stats_rx_lro_coalesced_pkt_count0_get(hw);
+		stats->drop_pkts_dma = reg_rx_dma_stat_counter7get(hw);
+		stats->rsc_pkts_rcvd = stats_rx_lro_coalesced_pkt_count0_get(hw);
 	}
 
 //    AQ_DBG_EXIT(err);

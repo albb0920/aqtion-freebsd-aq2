@@ -42,6 +42,8 @@
 #include <net/ethernet.h>
 #include "aq_common.h"
 
+struct aq_stats_s;
+
 #define AQ_WRITE_REG(hw, reg, value) writel(((hw)->hw_addr + (reg)), htole32(value))
 
 #define AQ_READ_REG(hw, reg) le32toh(readl((hw)->hw_addr + reg))
@@ -385,7 +387,7 @@ int aq_hw_reset(struct aq_hw *hw);
 
 int aq_hw_mpi_create(struct aq_hw *hw);
 
-int aq_hw_mpi_read_stats(struct aq_hw *hw, struct aq_hw_fw_mbox *pmbox);
+int aq_hw_mpi_read_stats(struct aq_hw *hw, struct aq_stats_s *stats);
 
 int aq_hw_init(struct aq_hw *hw, uint8_t adm_irq, bool msix, int capenable);
 

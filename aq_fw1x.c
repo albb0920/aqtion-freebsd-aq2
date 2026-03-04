@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 
 #include "aq_common.h"
 #include "aq_hw.h"
+#include "aq_stats.h"
 #include "aq_hw_llh.h"
 #include "aq_hw_llh_internal.h"
 #include "aq_fw.h"
@@ -86,7 +87,7 @@ int fw1x_set_mode(struct aq_hw* hw, enum aq_hw_fw_mpi_state_e mode,
 int fw1x_get_mode(struct aq_hw* hw, enum aq_hw_fw_mpi_state_e* mode,
     aq_fw_link_speed_t* speed, aq_fw_link_fc_t* fc);
 int fw1x_get_mac_addr(struct aq_hw* hw, uint8_t* mac_addr);
-int fw1x_get_stats(struct aq_hw* hw, struct aq_hw_stats_s* stats);
+int fw1x_get_stats(struct aq_hw* hw, struct aq_stats_s* stats);
 
 
 static fw1x_mode
@@ -292,7 +293,7 @@ fw1x_get_mac_addr(struct aq_hw* hw, uint8_t* mac)
 }
 
 int
-fw1x_get_stats(struct aq_hw* hw, struct aq_hw_stats_s* stats)
+fw1x_get_stats(struct aq_hw* hw, struct aq_stats_s* stats)
 {
 	int err = 0;
 
@@ -301,10 +302,22 @@ fw1x_get_stats(struct aq_hw* hw, struct aq_hw_stats_s* stats)
 	    (uint32_t*)(void*)&hw->mbox, sizeof hw->mbox / sizeof(uint32_t));
 
 	if (err >= 0) {
-		if (stats != &hw->mbox.stats)
-			memcpy(stats, &hw->mbox.stats, sizeof *stats);
-
-		stats->dpc = reg_rx_dma_stat_counter7get(hw);
+		stats->ucast_pkts_rcvd = hw->mbox.stats.uprc;
+		stats->mcast_pkts_rcvd = hw->mbox.stats.mprc;
+		stats->bcast_pkts_rcvd = hw->mbox.stats.bprc;
+		stats->err_pkts_txd = hw->mbox.stats.erpt;
+		stats->ucast_pkts_txd = hw->mbox.stats.uptc;
+		stats->mcast_pkts_txd = hw->mbox.stats.mptc;
+		stats->bcast_pkts_txd = hw->mbox.stats.bptc;
+		stats->err_pkts_rcvd = hw->mbox.stats.erpr;
+		stats->mcast_octets_txd = hw->mbox.stats.mbtc;
+		stats->bcast_octets_txd = hw->mbox.stats.bbtc;
+		stats->mcast_octets_rcvd = hw->mbox.stats.mbrc;
+		stats->bcast_octets_rcvd = hw->mbox.stats.bbrc;
+		stats->ucast_octets_rcvd = hw->mbox.stats.ubrc;
+		stats->ucast_octets_txd = hw->mbox.stats.ubtc;
+		stats->good_pkts_txd = hw->mbox.stats.ptc;
+		stats->good_pkts_rcvd = hw->mbox.stats.prc;
 	}
 
 	AQ_DBG_EXIT(err);

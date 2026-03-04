@@ -35,6 +35,7 @@
 #define AQ_FW_H
 
 struct aq_hw;
+struct aq_stats_s;
 
 typedef enum aq_fw_link_speed
 {
@@ -69,7 +70,7 @@ struct aq_firmware_ops
 	int (*get_mode)(struct aq_hw* hal, enum aq_hw_fw_mpi_state_e* mode, aq_fw_link_speed_t* speed, aq_fw_link_fc_t* fc);
 
 	int (*get_mac_addr)(struct aq_hw* hal, uint8_t* mac_addr);
-	int (*get_stats)(struct aq_hw* hal, struct aq_hw_stats_s* stats);
+	int (*get_stats)(struct aq_hw* hal, struct aq_stats_s* stats);
 
 	int (*led_control)(struct aq_hw* hal, uint32_t mode);
 	int (*get_phy_temp)(struct aq_hw *hal, int *temp_c);

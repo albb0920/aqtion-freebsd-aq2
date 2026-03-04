@@ -36,6 +36,7 @@
 #define _AQ_DEVICE_H_
 
 #include "aq_hw.h"
+#include "aq_stats.h"
 
 enum aq_media_type {
 	AQ_MEDIA_TYPE_UNKNOWN = 0,
@@ -60,30 +61,6 @@ enum aq_media_type {
 #define AQ_EEE_5G	BIT(3)
 #define AQ_EEE_10G	BIT(4)
 #define AQ_EEE_ALL	(AQ_EEE_100M | AQ_EEE_1G | AQ_EEE_2G5 | AQ_EEE_5G | AQ_EEE_10G)
-
-struct aq_stats_s {
-	uint64_t prc;
-	uint64_t uprc;
-	uint64_t mprc;
-	uint64_t bprc;
-	uint64_t cprc;
-	uint64_t erpr;
-	uint64_t dpc;
-	uint64_t brc;
-	uint64_t ubrc;
-	uint64_t mbrc;
-	uint64_t bbrc;
-
-	uint64_t ptc;
-	uint64_t uptc;
-	uint64_t mptc;
-	uint64_t bptc;
-	uint64_t erpt;
-	uint64_t btc;
-	uint64_t ubtc;
-	uint64_t mbtc;
-	uint64_t bbtc;
-};
 
 enum aq_dev_state_e {
 	AQ_DEV_STATE_UNLOAD,
@@ -140,8 +117,9 @@ struct aq_dev {
 	bool			linkup;
 	int			media_active;
 
-	struct aq_hw_stats_s	last_stats;
-	struct aq_stats_s	curr_stats;
+	bool			last_stats_valid;
+	struct aq_stats_s	last_stats;
+	struct aq_stats_s	accum_stats;
 
 	struct aq_rx_filters	rx_filters;
 

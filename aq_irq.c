@@ -59,60 +59,99 @@ int
 aq_update_hw_stats(aq_dev_t *aq_dev)
 {
 	struct aq_hw *hw = &aq_dev->hw;
-	struct aq_hw_fw_mbox mbox;
+	struct aq_stats_s stats;
 	bool aq2_b0 = AQ_HW_IS_AQ2(hw) &&
 	    hw->aq2_iface_ver == AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0;
-	aq_hw_mpi_read_stats(hw, &mbox);
+	int err;
 
-#define AQ_SDELTA(_N_) (aq_dev->curr_stats._N_ += \
-    mbox.stats._N_ - aq_dev->last_stats._N_)
+	err = aq_hw_mpi_read_stats(hw, &stats);
+	if (err != 0)
+		return (err);
+
+	if (!aq_dev->last_stats_valid) {
+		memcpy(&aq_dev->last_stats, &stats, sizeof(aq_dev->last_stats));
+		aq_dev->last_stats_valid = true;
+		return (0);
+	}
+
+#define AQ_SDELTA_32(_N_) (aq_dev->accum_stats._N_ += \
+    (uint32_t)stats._N_ - (uint32_t)aq_dev->last_stats._N_)
+#define AQ_SDELTA_64(_N_) do {					\
+	if (stats._N_ >= aq_dev->last_stats._N_)			\
+		aq_dev->accum_stats._N_ +=			\
+		    stats._N_ - aq_dev->last_stats._N_;	\
+	else							\
+		aq_dev->accum_stats._N_ += stats._N_;		\
+} while (0)
+
 	if (aq_dev->linkup) {
-		AQ_SDELTA(uprc);
-		AQ_SDELTA(mprc);
-		AQ_SDELTA(bprc);
-		AQ_SDELTA(cprc);
-		AQ_SDELTA(erpt);
+		if (aq2_b0) {
+			AQ_SDELTA_64(ucast_pkts_rcvd);
+			AQ_SDELTA_64(mcast_pkts_rcvd);
+			AQ_SDELTA_64(bcast_pkts_rcvd);
+			AQ_SDELTA_64(err_pkts_rcvd);
 
-		AQ_SDELTA(uptc);
-		AQ_SDELTA(mptc);
-		AQ_SDELTA(bptc);
-		AQ_SDELTA(erpr);
+			AQ_SDELTA_64(ucast_pkts_txd);
+			AQ_SDELTA_64(mcast_pkts_txd);
+			AQ_SDELTA_64(bcast_pkts_txd);
+			AQ_SDELTA_64(err_pkts_txd);
 
-        if (aq2_b0) {
-            aq_dev->curr_stats.brc +=
-                mbox.stats.ubrc - aq_dev->last_stats.ubrc;
-            aq_dev->curr_stats.btc +=
-                mbox.stats.ubtc - aq_dev->last_stats.ubtc;
-            aq_dev->curr_stats.ubrc = 0;
-            aq_dev->curr_stats.mbrc = 0;
-            aq_dev->curr_stats.bbrc = 0;
-            aq_dev->curr_stats.ubtc = 0;
-            aq_dev->curr_stats.mbtc = 0;
-            aq_dev->curr_stats.bbtc = 0;
-        } else {
-            AQ_SDELTA(ubrc);
-            AQ_SDELTA(ubtc);
-            AQ_SDELTA(mbrc);
-            AQ_SDELTA(mbtc);
-            AQ_SDELTA(bbrc);
-            AQ_SDELTA(bbtc);
+			AQ_SDELTA_64(good_octets_rcvd);
+			AQ_SDELTA_64(good_octets_txd);
+			AQ_SDELTA_64(pause_frames_rcvd);
+			AQ_SDELTA_64(pause_frames_txd);
 
-            aq_dev->curr_stats.brc = aq_dev->curr_stats.ubrc +
-                                     aq_dev->curr_stats.mbrc +
-                                     aq_dev->curr_stats.bbrc;
-            aq_dev->curr_stats.btc = aq_dev->curr_stats.ubtc +
-                                     aq_dev->curr_stats.mbtc +
-                                     aq_dev->curr_stats.bbtc;
-        }
-		AQ_SDELTA(ptc);
-		AQ_SDELTA(prc);
+			AQ_SDELTA_32(rsc_pkts_rcvd);
+			AQ_SDELTA_32(drop_pkts_dma);
 
-		AQ_SDELTA(dpc);
+			aq_dev->accum_stats.good_pkts_rcvd =
+			    aq_dev->accum_stats.ucast_pkts_rcvd +
+			    aq_dev->accum_stats.mcast_pkts_rcvd +
+			    aq_dev->accum_stats.bcast_pkts_rcvd;
+			aq_dev->accum_stats.good_pkts_txd =
+			    aq_dev->accum_stats.ucast_pkts_txd +
+			    aq_dev->accum_stats.mcast_pkts_txd +
+			    aq_dev->accum_stats.bcast_pkts_txd;
+		} else {
+			AQ_SDELTA_32(ucast_pkts_rcvd);
+			AQ_SDELTA_32(mcast_pkts_rcvd);
+			AQ_SDELTA_32(bcast_pkts_rcvd);
+			AQ_SDELTA_32(rsc_pkts_rcvd);
+			AQ_SDELTA_32(err_pkts_rcvd);
 
-    }
-#undef AQ_SDELTA
+			AQ_SDELTA_32(ucast_pkts_txd);
+			AQ_SDELTA_32(mcast_pkts_txd);
+			AQ_SDELTA_32(bcast_pkts_txd);
+			AQ_SDELTA_32(err_pkts_txd);
 
-	memcpy(&aq_dev->last_stats, &mbox.stats, sizeof(mbox.stats));
+			AQ_SDELTA_32(ucast_octets_rcvd);
+			AQ_SDELTA_32(mcast_octets_rcvd);
+			AQ_SDELTA_32(bcast_octets_rcvd);
+
+			AQ_SDELTA_32(ucast_octets_txd);
+			AQ_SDELTA_32(mcast_octets_txd);
+			AQ_SDELTA_32(bcast_octets_txd);
+
+			aq_dev->accum_stats.good_octets_rcvd =
+			    aq_dev->accum_stats.ucast_octets_rcvd +
+			    aq_dev->accum_stats.mcast_octets_rcvd +
+			    aq_dev->accum_stats.bcast_octets_rcvd;
+			aq_dev->accum_stats.good_octets_txd =
+			    aq_dev->accum_stats.ucast_octets_txd +
+			    aq_dev->accum_stats.mcast_octets_txd +
+			    aq_dev->accum_stats.bcast_octets_txd;
+			AQ_SDELTA_32(good_pkts_rcvd);
+			AQ_SDELTA_32(good_pkts_txd);
+
+			AQ_SDELTA_32(drop_pkts_dma);
+			AQ_SDELTA_32(pause_frames_rcvd);
+			AQ_SDELTA_32(pause_frames_txd);
+		}
+	}
+#undef AQ_SDELTA_64
+#undef AQ_SDELTA_32
+
+	memcpy(&aq_dev->last_stats, &stats, sizeof(aq_dev->last_stats));
 
 	return (0);
 }

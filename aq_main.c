@@ -477,6 +477,8 @@ aq_if_attach_pre(if_ctx_t ctx)
 	hw->fc.fc_tx = 1;
 	hw->eee_rate = 0;
 	softc->linkup = 0U;
+	softc->last_stats_valid = false;
+	memset(&softc->accum_stats, 0, sizeof(softc->accum_stats));
 	softc->wol_phy = false;
 	softc->wol_mask = 0;
 	softc->downshift = 0;
@@ -961,6 +963,7 @@ aq_if_stop(if_ctx_t ctx)
 	}
 
 	aq_hw_reset(&softc->hw);
+	softc->last_stats_valid = false;
 	memset(&softc->last_stats, 0, sizeof(softc->last_stats));
 	softc->linkup = false;
 	aq_if_update_admin_status(ctx);
@@ -975,11 +978,11 @@ aq_if_get_counter(if_ctx_t ctx, ift_counter cnt)
 
 	switch (cnt) {
 	case IFCOUNTER_IERRORS:
-		return (softc->curr_stats.erpr);
+		return (softc->accum_stats.err_pkts_rcvd);
 	case IFCOUNTER_IQDROPS:
-		return (softc->curr_stats.dpc);
+		return (softc->accum_stats.drop_pkts_dma);
 	case IFCOUNTER_OERRORS:
-		return (softc->curr_stats.erpt);
+		return (softc->accum_stats.err_pkts_txd);
 	default:
 		return (if_get_counter_default(ifp, cnt));
 	}
@@ -2548,7 +2551,7 @@ aq_add_stats_sysctls(struct aq_dev *softc)
 	struct sysctl_ctx_list  *ctx = device_get_sysctl_ctx(dev);
 	struct sysctl_oid       *tree = device_get_sysctl_tree(dev);
 	struct sysctl_oid_list  *child = SYSCTL_CHILDREN(tree);
-	struct aq_stats_s *stats = &softc->curr_stats;
+	struct aq_stats_s *stats = &softc->accum_stats;
 	struct sysctl_oid       *stat_node, *queue_node;
 	struct sysctl_oid_list  *stat_list, *queue_list;
 
@@ -2706,45 +2709,50 @@ aq_add_stats_sysctls(struct aq_dev *softc)
 	stat_list = SYSCTL_CHILDREN(stat_node);
 
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "good_pkts_rcvd",
-	    CTLFLAG_RD, &stats->prc, "Good Packets Received");
+	    CTLFLAG_RD, &stats->good_pkts_rcvd, "Good Packets Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "ucast_pkts_rcvd",
-	    CTLFLAG_RD, &stats->uprc, "Unicast Packets Received");
+	    CTLFLAG_RD, &stats->ucast_pkts_rcvd, "Unicast Packets Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "mcast_pkts_rcvd",
-	    CTLFLAG_RD, &stats->mprc, "Multicast Packets Received");
+	    CTLFLAG_RD, &stats->mcast_pkts_rcvd, "Multicast Packets Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "bcast_pkts_rcvd",
-	    CTLFLAG_RD, &stats->bprc, "Broadcast Packets Received");
+	    CTLFLAG_RD, &stats->bcast_pkts_rcvd, "Broadcast Packets Received");
+	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "pause_frames_rcvd",
+	    CTLFLAG_RD, &stats->pause_frames_rcvd, "Pause Frames Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "rsc_pkts_rcvd",
-	    CTLFLAG_RD, &stats->cprc, "Coalesced Packets Received");
+	    CTLFLAG_RD, &stats->rsc_pkts_rcvd, "Coalesced Packets Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "err_pkts_rcvd",
-	    CTLFLAG_RD, &stats->erpr, "Errors of Packet Receive");
+	    CTLFLAG_RD, &stats->err_pkts_rcvd, "Errors of Packet Receive");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "drop_pkts_dma",
-	    CTLFLAG_RD, &stats->dpc, "Dropped Packets in DMA");
+	    CTLFLAG_RD, &stats->drop_pkts_dma, "Dropped Packets in DMA");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "good_octets_rcvd",
-	    CTLFLAG_RD, &stats->brc, "Good Octets Received");
+	    CTLFLAG_RD, &stats->good_octets_rcvd, "Good Octets Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "ucast_octets_rcvd",
-	    CTLFLAG_RD, &stats->ubrc, "Unicast Octets Received");
+	    CTLFLAG_RD, &stats->ucast_octets_rcvd, "Unicast Octets Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "mcast_octets_rcvd",
-	    CTLFLAG_RD, &stats->mbrc, "Multicast Octets Received");
+	    CTLFLAG_RD, &stats->mcast_octets_rcvd, "Multicast Octets Received");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "bcast_octets_rcvd",
-	    CTLFLAG_RD, &stats->bbrc, "Broadcast Octets Received");
+	    CTLFLAG_RD, &stats->bcast_octets_rcvd, "Broadcast Octets Received");
 
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "good_pkts_txd",
-	    CTLFLAG_RD, &stats->ptc, "Good Packets Transmitted");
+	    CTLFLAG_RD, &stats->good_pkts_txd, "Good Packets Transmitted");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "ucast_pkts_txd",
-	    CTLFLAG_RD, &stats->uptc, "Unicast Packets Transmitted");
+	    CTLFLAG_RD, &stats->ucast_pkts_txd, "Unicast Packets Transmitted");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "mcast_pkts_txd",
-	    CTLFLAG_RD, &stats->mptc, "Multicast Packets Transmitted");
+	    CTLFLAG_RD, &stats->mcast_pkts_txd, "Multicast Packets Transmitted");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "bcast_pkts_txd",
-	    CTLFLAG_RD, &stats->bptc, "Broadcast Packets Transmitted");
+	    CTLFLAG_RD, &stats->bcast_pkts_txd, "Broadcast Packets Transmitted");
+	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "pause_frames_txd",
+	    CTLFLAG_RD, &stats->pause_frames_txd,
+	    "Pause Frames Transmitted");
 
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "err_pkts_txd",
-	    CTLFLAG_RD, &stats->erpt, "Errors of Packet Transmit");
+	    CTLFLAG_RD, &stats->err_pkts_txd, "Errors of Packet Transmit");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "good_octets_txd",
-	    CTLFLAG_RD, &stats->btc, "Good Octets Transmitted");
+	    CTLFLAG_RD, &stats->good_octets_txd, "Good Octets Transmitted");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "ucast_octets_txd",
-	    CTLFLAG_RD, &stats->ubtc, "Unicast Octets Transmitted");
+	    CTLFLAG_RD, &stats->ucast_octets_txd, "Unicast Octets Transmitted");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "mcast_octets_txd",
-	    CTLFLAG_RD, &stats->mbtc, "Multicast Octets Transmitted");
+	    CTLFLAG_RD, &stats->mcast_octets_txd, "Multicast Octets Transmitted");
 	SYSCTL_ADD_UQUAD(ctx, stat_list, OID_AUTO, "bcast_octets_txd",
-	    CTLFLAG_RD, &stats->bbtc, "Broadcast Octets Transmitted");
+	    CTLFLAG_RD, &stats->bcast_octets_txd, "Broadcast Octets Transmitted");
 }

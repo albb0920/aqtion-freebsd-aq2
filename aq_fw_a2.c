@@ -478,8 +478,8 @@ aq2_u64_to_u32(uint64_t val)
 	return (uint32_t)(val & 0xffffffffu);
 }
 
-static void aq2_stats_from_a0(struct aq_hw *hw, struct aq_hw_stats_s *stats,
-    const struct aq2_stats_a0 *a0)
+static void
+aq2_stats_from_a0(struct aq_stats_s *stats, const struct aq2_stats_a0 *a0)
 {
 	uint64_t rx_uc_oct = le64toh(a0->msm.rx_unicast_octets);
 	uint64_t rx_mc_oct = le64toh(a0->msm.rx_multicast_octets);
@@ -492,77 +492,69 @@ static void aq2_stats_from_a0(struct aq_hw *hw, struct aq_hw_stats_s *stats,
 	uint32_t rx_mc_frames = le32toh(a0->msm.rx_multicast_frames);
 	uint32_t rx_bc_frames = le32toh(a0->msm.rx_broadcast_frames);
 	uint32_t rx_errs = le32toh(a0->msm.rx_error_frames);
-	uint32_t rx_drops = le32toh(a0->msm.rx_dropped_frames);
 
 	uint32_t tx_uc_frames = le32toh(a0->msm.tx_unicast_frames);
 	uint32_t tx_mc_frames = le32toh(a0->msm.tx_multicast_frames);
 	uint32_t tx_bc_frames = le32toh(a0->msm.tx_broadcast_frames);
 	uint32_t tx_errs = le32toh(a0->msm.tx_errors);
 
-	stats->uprc = rx_uc_frames;
-	stats->mprc = rx_mc_frames;
-	stats->bprc = rx_bc_frames;
-	stats->erpr = rx_errs;
+	stats->ucast_pkts_rcvd = rx_uc_frames;
+	stats->mcast_pkts_rcvd = rx_mc_frames;
+	stats->bcast_pkts_rcvd = rx_bc_frames;
+	stats->err_pkts_rcvd = rx_errs;
 
-	stats->uptc = tx_uc_frames;
-	stats->mptc = tx_mc_frames;
-	stats->bptc = tx_bc_frames;
-	stats->erpt = tx_errs;
+	stats->ucast_pkts_txd = tx_uc_frames;
+	stats->mcast_pkts_txd = tx_mc_frames;
+	stats->bcast_pkts_txd = tx_bc_frames;
+	stats->err_pkts_txd = tx_errs;
 
-	stats->ubrc = aq2_u64_to_u32(rx_uc_oct);
-	stats->mbrc = aq2_u64_to_u32(rx_mc_oct);
-	stats->bbrc = aq2_u64_to_u32(rx_bc_oct);
+	stats->ucast_octets_rcvd = aq2_u64_to_u32(rx_uc_oct);
+	stats->mcast_octets_rcvd = aq2_u64_to_u32(rx_mc_oct);
+	stats->bcast_octets_rcvd = aq2_u64_to_u32(rx_bc_oct);
 
-	stats->ubtc = aq2_u64_to_u32(tx_uc_oct);
-	stats->mbtc = aq2_u64_to_u32(tx_mc_oct);
-	stats->bbtc = aq2_u64_to_u32(tx_bc_oct);
+	stats->ucast_octets_txd = aq2_u64_to_u32(tx_uc_oct);
+	stats->mcast_octets_txd = aq2_u64_to_u32(tx_mc_oct);
+	stats->bcast_octets_txd = aq2_u64_to_u32(tx_bc_oct);
 
-	stats->ptc = tx_uc_frames + tx_mc_frames + tx_bc_frames;
-	stats->prc = rx_uc_frames + rx_mc_frames + rx_bc_frames;
-	stats->dpc = rx_drops ? rx_drops : reg_rx_dma_stat_counter7get(hw);
+	stats->good_pkts_rcvd = rx_uc_frames + rx_mc_frames + rx_bc_frames;
+	stats->good_pkts_txd = tx_uc_frames + tx_mc_frames + tx_bc_frames;
 }
 
-static void aq2_stats_from_b0(struct aq_hw *hw, struct aq_hw_stats_s *stats,
-    const struct aq2_stats_b0 *b0)
+static void
+aq2_stats_from_b0(struct aq_stats_s *stats, const struct aq2_stats_b0 *b0)
 {
 	uint64_t rx_good_oct = le64toh(b0->rx_good_octets);
 	uint64_t tx_good_oct = le64toh(b0->tx_good_octets);
 
-	uint32_t rx_uc_frames = aq2_u64_to_u32(le64toh(b0->rx_unicast_frames));
-	uint32_t rx_mc_frames =
-	    aq2_u64_to_u32(le64toh(b0->rx_multicast_frames));
-	uint32_t rx_bc_frames =
-	    aq2_u64_to_u32(le64toh(b0->rx_broadcast_frames));
-	uint32_t rx_errs = aq2_u64_to_u32(le64toh(b0->rx_errors));
+	uint64_t rx_uc_frames = le64toh(b0->rx_unicast_frames);
+	uint64_t rx_mc_frames = le64toh(b0->rx_multicast_frames);
+	uint64_t rx_bc_frames = le64toh(b0->rx_broadcast_frames);
+	uint64_t rx_errs = le64toh(b0->rx_errors);
 
-	uint32_t tx_uc_frames = aq2_u64_to_u32(le64toh(b0->tx_unicast_frames));
-	uint32_t tx_mc_frames =
-	    aq2_u64_to_u32(le64toh(b0->tx_multicast_frames));
-	uint32_t tx_bc_frames =
-	    aq2_u64_to_u32(le64toh(b0->tx_broadcast_frames));
-	uint32_t tx_errs = aq2_u64_to_u32(le64toh(b0->tx_errors));
+	uint64_t tx_uc_frames = le64toh(b0->tx_unicast_frames);
+	uint64_t tx_mc_frames = le64toh(b0->tx_multicast_frames);
+	uint64_t tx_bc_frames = le64toh(b0->tx_broadcast_frames);
+	uint64_t tx_errs = le64toh(b0->tx_errors);
 
-	stats->uprc = rx_uc_frames;
-	stats->mprc = rx_mc_frames;
-	stats->bprc = rx_bc_frames;
-	stats->erpr = rx_errs;
+	stats->pause_frames_rcvd = le64toh(b0->rx_pause_frames);
+	stats->pause_frames_txd = le64toh(b0->tx_pause_frames);
 
-	stats->uptc = tx_uc_frames;
-	stats->mptc = tx_mc_frames;
-	stats->bptc = tx_bc_frames;
-	stats->erpt = tx_errs;
+	stats->ucast_pkts_rcvd = rx_uc_frames;
+	stats->mcast_pkts_rcvd = rx_mc_frames;
+	stats->bcast_pkts_rcvd = rx_bc_frames;
+	stats->err_pkts_rcvd = rx_errs;
 
-	stats->ubrc = aq2_u64_to_u32(rx_good_oct);
-	stats->mbrc = 0;
-	stats->bbrc = 0;
+	stats->ucast_pkts_txd = tx_uc_frames;
+	stats->mcast_pkts_txd = tx_mc_frames;
+	stats->bcast_pkts_txd = tx_bc_frames;
+	stats->err_pkts_txd = tx_errs;
 
-	stats->ubtc = aq2_u64_to_u32(tx_good_oct);
-	stats->mbtc = 0;
-	stats->bbtc = 0;
+	stats->good_octets_rcvd = rx_good_oct;
 
-	stats->ptc = tx_uc_frames + tx_mc_frames + tx_bc_frames;
-	stats->prc = rx_uc_frames + rx_mc_frames + rx_bc_frames;
-	stats->dpc = reg_rx_dma_stat_counter7get(hw);
+	stats->good_octets_txd = tx_good_oct;
+
+	stats->good_pkts_rcvd = rx_uc_frames + rx_mc_frames + rx_bc_frames;
+	stats->good_pkts_txd = tx_uc_frames + tx_mc_frames + tx_bc_frames;
 }
 
 static int
@@ -886,7 +878,7 @@ aq2_fw_get_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e *mode,
 }
 
 static int
-aq2_fw_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
+aq2_fw_get_stats(struct aq_hw *hw, struct aq_stats_s *stats)
 {
 	union aq2_stats_buf stats_buf;
 	uint32_t rx_uc_frames;
@@ -911,9 +903,9 @@ aq2_fw_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
 	if (err == 0) {
 		if (hw->aq2_iface_ver ==
 		    AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0)
-			aq2_stats_from_b0(hw, stats, &stats_buf.b0);
+			aq2_stats_from_b0(stats, &stats_buf.b0);
 		else
-			aq2_stats_from_a0(hw, stats, &stats_buf.a0);
+			aq2_stats_from_a0(stats, &stats_buf.a0);
 		return (0);
 	}
 
@@ -935,27 +927,28 @@ aq2_fw_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
 	if (rx_total_oct >= (rx_uc_oct + rx_bc_oct))
 		rx_mc_oct = rx_total_oct - rx_uc_oct - rx_bc_oct;
 
-	stats->uprc = rx_uc_frames;
-	stats->mprc = rx_mc_frames;
-	stats->bprc = rx_bc_frames;
-	stats->erpr = rx_errs;
+	stats->ucast_pkts_rcvd = rx_uc_frames;
+	stats->mcast_pkts_rcvd = rx_mc_frames;
+	stats->bcast_pkts_rcvd = rx_bc_frames;
+	stats->err_pkts_rcvd = rx_errs;
 
-	stats->uptc = tx_uc_frames;
-	stats->mptc = tx_mc_frames;
-	stats->bptc = tx_bc_frames;
-	stats->erpt = tx_errs;
+	stats->ucast_pkts_txd = tx_uc_frames;
+	stats->mcast_pkts_txd = tx_mc_frames;
+	stats->bcast_pkts_txd = tx_bc_frames;
+	stats->err_pkts_txd = tx_errs;
 
-	stats->ubrc = rx_uc_oct;
-	stats->mbrc = rx_mc_oct;
-	stats->bbrc = rx_bc_oct;
+	stats->ucast_octets_rcvd = rx_uc_oct;
+	stats->mcast_octets_rcvd = rx_mc_oct;
+	stats->bcast_octets_rcvd = rx_bc_oct;
 
-	stats->ubtc = tx_uc_oct;
-	stats->mbtc = tx_mc_oct;
-	stats->bbtc = tx_bc_oct;
+	stats->ucast_octets_txd = tx_uc_oct;
+	stats->mcast_octets_txd = tx_mc_oct;
+	stats->bcast_octets_txd = tx_bc_oct;
+	stats->good_octets_rcvd = rx_total_oct;
+	stats->good_octets_txd = (uint64_t)tx_uc_oct + tx_mc_oct + tx_bc_oct;
 
-	stats->ptc = tx_uc_frames + tx_mc_frames + tx_bc_frames;
-	stats->prc = rx_uc_frames + rx_mc_frames + rx_bc_frames;
-	stats->dpc = reg_rx_dma_stat_counter7get(hw);
+	stats->good_pkts_rcvd = rx_uc_frames + rx_mc_frames + rx_bc_frames;
+	stats->good_pkts_txd = tx_uc_frames + tx_mc_frames + tx_bc_frames;
 
 	return (0);
 }
