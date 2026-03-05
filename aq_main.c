@@ -201,6 +201,7 @@ static void aq_add_stats_sysctls(struct aq_dev *softc);
 static int aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_cable_len(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS);
+static int aq_sysctl_fw_iface_ver(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_eee_supported(SYSCTL_HANDLER_ARGS);
 static int aq_sysctl_eee_lp_rate(SYSCTL_HANDLER_ARGS);
@@ -1612,6 +1613,26 @@ aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS)
 }
 
 static int
+aq_sysctl_fw_iface_ver(SYSCTL_HANDLER_ARGS)
+{
+	struct aq_dev *softc = (struct aq_dev *)arg1;
+	char buf[16];
+
+	if (!AQ_HW_IS_AQ2(&softc->hw))
+		buf[0] = '\0';
+	else if (softc->hw.aq2_iface_ver ==
+	    AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0)
+		snprintf(buf, sizeof(buf), "B0");
+	else if (softc->hw.aq2_iface_ver ==
+	    AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_A0)
+		snprintf(buf, sizeof(buf), "A0");
+	else
+		buf[0] = '\0';
+
+	return (sysctl_handle_string(oidp, buf, 0, req));
+}
+
+static int
 aq_parse_u32(const char *val, uint32_t *out)
 {
 	char *endp;
@@ -2570,6 +2591,10 @@ aq_add_stats_sysctls(struct aq_dev *softc)
 	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "cable_diag",
 		CTLTYPE_STRING | CTLFLAG_RD, softc, 0,
 		aq_sysctl_cable_diag, "A", "Cable diagnostics");
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "fw_iface_ver",
+		CTLTYPE_STRING | CTLFLAG_RD, softc, 0,
+		aq_sysctl_fw_iface_ver, "A",
+		"Firmware interface version (AQ2-only)");
 	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "eee_rate",
 		CTLTYPE_INT | CTLFLAG_RW, softc, 0,
 		aq_sysctl_eee_rate, "I", "EEE rate mask");

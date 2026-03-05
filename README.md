@@ -80,3 +80,60 @@ sysctl dev.aq.0.downshift=3
 sysctl dev.aq.0.media_detect=1
 sysctl dev.aq.0.loopback=1   # 0=off,1=int,2=ext
 ```
+
+## Accumulated Statistics
+
+Available counters depend on device family and firmware interface version.
+
+For AQ2 (AQC113/AQC114/AQC115/AQC116) NICs, you can find your firmware
+interface version with:
+```
+sysctl dev.aq.N.fw_iface_ver
+```
+
+All `dev.aq.N.mac.*` fields are always present in sysctl.
+
+When a field is not provided by the firmware interface, it stays `0`.
+
+### Counters availability
+
+Legend:
+- `Y`: counter is populated
+- `N`: counter is not populated
+
+| sysctl field         | meaning                           | AQ1 | AQ2 A0 | AQ2 B0 |
+|----------------------|-----------------------------------|-----|--------|--------|
+| `good_pkts_rcvd`     | RX good packets (uni+multi+bcast) | Y   | Y      | Y      |
+| `ucast_pkts_rcvd`    | RX unicast packets                | Y   | Y      | Y      |
+| `mcast_pkts_rcvd`    | RX multicast packets              | Y   | Y      | Y      |
+| `bcast_pkts_rcvd`    | RX broadcast packets              | Y   | Y      | Y      |
+| `pause_frames_rcvd`  | RX Ethernet pause frames          | N   | N      | Y      |
+| `rsc_pkts_rcvd`      | RX coalesced packets (LRO/RSC)    | Y   | Y      | Y      |
+| `err_pkts_rcvd`      | RX error packets                  | Y   | Y      | Y      |
+| `drop_pkts_dma`      | RX DMA drops                      | Y   | Y      | Y      |
+| `good_pkts_txd`      | TX good packets (uni+multi+bcast) | Y   | Y      | Y      |
+| `ucast_pkts_txd`     | TX unicast packets                | Y   | Y      | Y      |
+| `mcast_pkts_txd`     | TX multicast packets              | Y   | Y      | Y      |
+| `bcast_pkts_txd`     | TX broadcast packets              | Y   | Y      | Y      |
+| `pause_frames_txd`   | TX Ethernet pause frames          | N   | N      | Y      |
+| `err_pkts_txd`       | TX error packets                  | Y   | Y      | Y      |
+| `good_octets_rcvd`   | RX good octets                    | Y   | Y      | Y      |
+| `ucast_octets_rcvd`  | RX unicast octets                 | Y   | Y      | N      |
+| `mcast_octets_rcvd`  | RX multicast octets               | Y   | Y      | N      |
+| `bcast_octets_rcvd`  | RX broadcast octets               | Y   | Y      | N      |
+| `good_octets_txd`    | TX good octets                    | Y   | Y      | Y      |
+| `ucast_octets_txd`   | TX unicast octets                 | Y   | Y      | N      |
+| `mcast_octets_txd`   | TX multicast octets               | Y   | Y      | N      |
+| `bcast_octets_txd`   | TX broadcast octets               | Y   | Y      | N      |
+
+Notes:
+- On AQ1 and AQ2 `A0`, pause frame counters are not available.
+- On AQ2 `B0`, per-cast octet counters are not available; use
+  `good_octets_rcvd` / `good_octets_txd`.
+
+### Per-queue Statistics
+
+- `dev.aq.N.tx_queueM.*`: `tx_pkts`, `tx_bytes`, `tx_drops`,
+  `tx_queue_full`, `tx_head`, `tx_tail`
+- `dev.aq.N.rx_queueM.*`: `rx_pkts`, `rx_bytes`, `jumbo_pkts`, `rx_err`,
+  `irq`, `rx_head`, `rx_tail`
