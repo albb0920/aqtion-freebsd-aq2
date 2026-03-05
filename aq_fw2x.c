@@ -470,7 +470,8 @@ fw2x_eee_mask_to_caps_(uint32_t rate)
 	return (caps);
 }
 
-int fw2x_read_settings_addr(struct aq_hw *hw)
+int
+fw2x_read_settings_addr(struct aq_hw *hw)
 {
 	uint32_t addr = 0;
 	uint32_t len = 0;
@@ -541,7 +542,8 @@ fw2x_rpc_call(struct aq_hw *hw, const void *buf, uint32_t len)
 	return (0);
 }
 
-int fw2x_set_downshift(struct aq_hw *hw, uint32_t counter)
+int
+fw2x_set_downshift(struct aq_hw *hw, uint32_t counter)
 {
 	uint32_t mpi_opts;
 	uint32_t offset;
@@ -563,7 +565,8 @@ int fw2x_set_downshift(struct aq_hw *hw, uint32_t counter)
 	return (0);
 }
 
-int fw2x_set_media_detect(struct aq_hw *hw, bool enable)
+int
+fw2x_set_media_detect(struct aq_hw *hw, bool enable)
 {
 	uint32_t val = enable ? 1U : 0U;
 	uint32_t offset;
@@ -574,7 +577,8 @@ int fw2x_set_media_detect(struct aq_hw *hw, bool enable)
 	return (fw2x_write_settings_dwords(hw, offset, &val, 1));
 }
 
-int fw2x_set_loopback(struct aq_hw *hw, int mode)
+int
+fw2x_set_loopback(struct aq_hw *hw, int mode)
 {
 	uint32_t mpi_opts;
 
@@ -929,7 +933,8 @@ fw2x_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
 	return (EOK);
 }
 
-int fw2x_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
+int
+fw2x_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 {
 	uint32_t mpi_ctrl2;
 	struct fw2x_rpc_msg msg;

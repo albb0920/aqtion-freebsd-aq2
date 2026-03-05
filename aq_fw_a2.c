@@ -472,7 +472,8 @@ union aq2_stats_buf {
 	uint32_t raw[29];
 };
 
-static uint32_t aq2_u64_to_u32(uint64_t val)
+static uint32_t
+aq2_u64_to_u32(uint64_t val)
 {
 	return (uint32_t)(val & 0xffffffffu);
 }
@@ -600,7 +601,8 @@ aq2_interface_buffer_read(struct aq_hw *hw, uint32_t reg0, uint32_t *data0,
 	return (0);
 }
 
-static int aq2_fw_wait_shared_ack(struct aq_hw *hw)
+static int
+aq2_fw_wait_shared_ack(struct aq_hw *hw)
 {
 	int timo;
 	uint32_t v;
@@ -618,7 +620,8 @@ static int aq2_fw_wait_shared_ack(struct aq_hw *hw)
 	return (-ETIMEDOUT);
 }
 
-int aq2_fw_reboot(struct aq_hw *hw)
+int
+aq2_fw_reboot(struct aq_hw *hw)
 {
 	uint32_t v;
 	uint32_t filter_caps[3];
@@ -753,7 +756,8 @@ aq2_fw_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
 	return (0);
 }
 
-static int aq2_fw_set_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e mode,
+static int
+aq2_fw_set_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e mode,
     aq_fw_link_speed_t speed)
 {
 	uint32_t v;
@@ -956,7 +960,8 @@ aq2_fw_get_stats(struct aq_hw *hw, struct aq_hw_stats_s *stats)
 	return (0);
 }
 
-int aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
+int
+aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 {
 	struct aq2_wake_on_lan wol;
 	uint32_t mac_addr[2];
@@ -1052,7 +1057,8 @@ aq2_eee_mask_from_lkp(const struct aq2_lkp_link_caps *caps)
 	return (rate);
 }
 
-static uint32_t aq2_eee_mask_from_link_options(uint32_t v)
+static uint32_t
+aq2_eee_mask_from_link_options(uint32_t v)
 {
 	uint32_t rate = 0;
 

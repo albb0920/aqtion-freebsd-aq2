@@ -51,7 +51,7 @@ reg_glb_fw_image_id1_set(struct aq_hw* hw, uint32_t value)
 uint32_t
 reg_glb_fw_image_id1_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, glb_fw_image_id1_adr);
+	return (AQ_READ_REG(hw, glb_fw_image_id1_adr));
 }
 
 void
@@ -63,13 +63,13 @@ reg_glb_cpu_sem_set(struct aq_hw *aq_hw, uint32_t sem_value, uint32_t sem_index)
 uint32_t
 reg_glb_cpu_sem_get(struct aq_hw *aq_hw, uint32_t sem_index)
 {
-	return AQ_READ_REG(aq_hw, glb_cpu_sem_adr(sem_index));
+	return (AQ_READ_REG(aq_hw, glb_cpu_sem_adr(sem_index)));
 }
 
 uint32_t
 reg_glb_standard_ctl1_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, glb_standard_ctl1_adr);
+	return (AQ_READ_REG(hw, glb_standard_ctl1_adr));
 }
 void
 reg_glb_standard_ctl1_set(struct aq_hw* hw, uint32_t glb_standard_ctl1)
@@ -85,7 +85,7 @@ reg_global_ctl2_set(struct aq_hw* hw, uint32_t global_ctl2)
 uint32_t
 reg_global_ctl2_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, glb_ctl2_adr);
+	return (AQ_READ_REG(hw, glb_ctl2_adr));
 }
 
 void
@@ -97,7 +97,7 @@ reg_glb_daisy_chain_status1_set(struct aq_hw* hw,
 uint32_t
 reg_glb_daisy_chain_status1_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, glb_daisy_chain_status1_adr);
+	return (AQ_READ_REG(hw, glb_daisy_chain_status1_adr));
 }
 
 void
@@ -117,20 +117,20 @@ glb_soft_res_set(struct aq_hw *aq_hw, uint32_t soft_res)
 uint32_t
 glb_soft_res_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG_BIT(aq_hw, glb_soft_res_adr, glb_soft_res_msk,
-	    glb_soft_res_shift);
+	return (AQ_READ_REG_BIT(aq_hw, glb_soft_res_adr, glb_soft_res_msk,
+	    glb_soft_res_shift));
 }
 
 uint32_t
 reg_rx_dma_stat_counter7get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, rx_dma_stat_counter7_adr);
+	return (AQ_READ_REG(aq_hw, rx_dma_stat_counter7_adr));
 }
 
 uint32_t
 reg_glb_mif_id_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, glb_mif_id_adr);
+	return (AQ_READ_REG(aq_hw, glb_mif_id_adr));
 }
 
 
@@ -143,8 +143,8 @@ mpi_tx_reg_res_dis_set(struct aq_hw* hw, uint32_t mpi_tx_reg_res_dis)
 uint32_t
 mpi_tx_reg_res_dis_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG_BIT(hw, mpi_tx_reg_res_dis_adr,
-	    mpi_tx_reg_res_dis_msk, mpi_tx_reg_res_dis_shift);
+	return (AQ_READ_REG_BIT(hw, mpi_tx_reg_res_dis_adr,
+	    mpi_tx_reg_res_dis_msk, mpi_tx_reg_res_dis_shift));
 }
 
 
@@ -152,61 +152,61 @@ mpi_tx_reg_res_dis_get(struct aq_hw* hw)
 uint32_t
 rpb_rx_dma_drop_pkt_cnt_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, rpb_rx_dma_drop_pkt_cnt_adr);
+	return (AQ_READ_REG(aq_hw, rpb_rx_dma_drop_pkt_cnt_adr));
 }
 
 uint32_t
 stats_rx_dma_good_octet_counterlsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_rx_dma_good_octet_counterlsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_rx_dma_good_octet_counterlsw__adr));
 }
 
 uint32_t
 stats_rx_dma_good_pkt_counterlsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_rx_dma_good_pkt_counterlsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_rx_dma_good_pkt_counterlsw__adr));
 }
 
 uint32_t
 stats_tx_dma_good_octet_counterlsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_tx_dma_good_octet_counterlsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_tx_dma_good_octet_counterlsw__adr));
 }
 
 uint32_t
 stats_tx_dma_good_pkt_counterlsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_tx_dma_good_pkt_counterlsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_tx_dma_good_pkt_counterlsw__adr));
 }
 
 uint32_t
 stats_rx_dma_good_octet_countermsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_rx_dma_good_octet_countermsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_rx_dma_good_octet_countermsw__adr));
 }
 
 uint32_t
 stats_rx_dma_good_pkt_countermsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_rx_dma_good_pkt_countermsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_rx_dma_good_pkt_countermsw__adr));
 }
 
 uint32_t
 stats_tx_dma_good_octet_countermsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_tx_dma_good_octet_countermsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_tx_dma_good_octet_countermsw__adr));
 }
 
 uint32_t
 stats_tx_dma_good_pkt_countermsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_tx_dma_good_pkt_countermsw__adr);
+	return (AQ_READ_REG(aq_hw, stats_tx_dma_good_pkt_countermsw__adr));
 }
 
 uint32_t
 stats_rx_lro_coalesced_pkt_count0_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, stats_rx_lo_coalesced_pkt_count0__addr);
+	return (AQ_READ_REG(aq_hw, stats_rx_lo_coalesced_pkt_count0__addr));
 }
 
 /* interrupt */
@@ -400,13 +400,13 @@ itr_irq_status_clearlsw_set(struct aq_hw *aq_hw, uint32_t irq_status_clearlsw)
 uint32_t
 itr_irq_statuslsw_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, itr_isrlsw_adr);
+	return (AQ_READ_REG(aq_hw, itr_isrlsw_adr));
 }
 
 uint32_t
 itr_res_irq_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG_BIT(aq_hw, itr_res_adr, itr_res_msk, itr_res_shift);
+	return (AQ_READ_REG_BIT(aq_hw, itr_res_adr, itr_res_msk, itr_res_shift));
 }
 
 void
@@ -426,8 +426,8 @@ itr_link_int_map_en_set(struct aq_hw *aq_hw, uint32_t link_int_en_map_en)
 uint32_t
 itr_link_int_map_en_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG_BIT(aq_hw, itrImrLinkEn_ADR, itrImrLinkEn_MSK,
-	    itrImrLinkEn_SHIFT);
+	return (AQ_READ_REG_BIT(aq_hw, itrImrLinkEn_ADR, itrImrLinkEn_MSK,
+	    itrImrLinkEn_SHIFT));
 }
 
 void
@@ -440,8 +440,8 @@ itr_link_int_map_set(struct aq_hw *aq_hw, uint32_t link_int_map)
 uint32_t
 itr_link_int_map_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG_BIT(aq_hw, itrImrLink_ADR, itrImrLink_MSK,
-	    itrImrLink_SHIFT);
+	return (AQ_READ_REG_BIT(aq_hw, itrImrLink_ADR, itrImrLink_MSK,
+	    itrImrLink_SHIFT));
 }
 
 void
@@ -455,8 +455,8 @@ itr_mif_int_map_en_set(struct aq_hw *aq_hw, uint32_t mifInterruptMappingEnable,
 uint32_t
 itr_mif_int_map_en_get(struct aq_hw *aq_hw, uint32_t mif)
 {
-	return AQ_READ_REG_BIT(aq_hw, itrImrMifMEn_ADR(mif),
-	    itrImrMifMEn_MSK(mif), itrImrMifMEn_SHIFT(mif));
+	return (AQ_READ_REG_BIT(aq_hw, itrImrMifMEn_ADR(mif),
+	    itrImrMifMEn_MSK(mif), itrImrMifMEn_SHIFT(mif)));
 }
 
 void
@@ -470,8 +470,8 @@ itr_mif_int_map_set(struct aq_hw *aq_hw, uint32_t mifInterruptMapping,
 uint32_t
 itr_mif_int_map_get(struct aq_hw *aq_hw, uint32_t mif)
 {
-	return AQ_READ_REG_BIT(aq_hw, itrImrMifM_ADR(mif), itrImrMifM_MSK(mif),
-	    itrImrMifM_SHIFT(mif));
+	return (AQ_READ_REG_BIT(aq_hw, itrImrMifM_ADR(mif), itrImrMifM_MSK(mif),
+	    itrImrMifM_SHIFT(mif)));
 }
 
 void
@@ -563,8 +563,8 @@ rdm_rx_desc_head_splitting_set(struct aq_hw *aq_hw,
 uint32_t
 rdm_rx_desc_head_ptr_get(struct aq_hw *aq_hw, uint32_t descriptor)
 {
-	return AQ_READ_REG_BIT(aq_hw, rdm_descdhd_adr(descriptor),
-	    rdm_descdhd_msk, rdm_descdhd_shift);
+	return (AQ_READ_REG_BIT(aq_hw, rdm_descdhd_adr(descriptor),
+	    rdm_descdhd_msk, rdm_descdhd_shift));
 }
 
 void
@@ -624,7 +624,7 @@ reg_gen_irq_map_set(struct aq_hw *aq_hw, uint32_t gen_intr_map, uint32_t regidx)
 uint32_t
 reg_gen_irq_status_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, gen_intr_stat_adr);
+	return (AQ_READ_REG(aq_hw, gen_intr_stat_adr));
 }
 
 void
@@ -658,7 +658,7 @@ reg_rx_dma_desc_base_addressmswset(struct aq_hw *aq_hw,
 uint32_t
 reg_rx_dma_desc_status_get(struct aq_hw *aq_hw, uint32_t descriptor)
 {
-	return AQ_READ_REG(aq_hw, rx_dma_desc_stat_adr(descriptor));
+	return (AQ_READ_REG(aq_hw, rx_dma_desc_stat_adr(descriptor)));
 }
 
 void
@@ -672,7 +672,7 @@ reg_rx_dma_desc_tail_ptr_set(struct aq_hw *aq_hw,
 uint32_t
 reg_rx_dma_desc_tail_ptr_get(struct aq_hw *aq_hw, uint32_t descriptor)
 {
-	return AQ_READ_REG(aq_hw, rx_dma_desc_tail_ptr_adr(descriptor));
+	return (AQ_READ_REG(aq_hw, rx_dma_desc_tail_ptr_adr(descriptor)));
 }
 
 void
@@ -743,7 +743,7 @@ reg_tx_dma_desc_tail_ptr_set(struct aq_hw *aq_hw,
 uint32_t
 reg_tx_dma_desc_tail_ptr_get(struct aq_hw *aq_hw, uint32_t descriptor)
 {
-	return AQ_READ_REG(aq_hw, tx_dma_desc_tail_ptr_adr(descriptor));
+	return (AQ_READ_REG(aq_hw, tx_dma_desc_tail_ptr_adr(descriptor)));
 }
 
 void
@@ -941,14 +941,14 @@ rpf_rss_key_wr_data_set(struct aq_hw *aq_hw, uint32_t rss_key_wr_data)
 uint32_t
 rpf_rss_key_rd_data_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, rpf_rss_key_rd_data_adr);
+	return (AQ_READ_REG(aq_hw, rpf_rss_key_rd_data_adr));
 }
 
 uint32_t
 rpf_rss_key_wr_en_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG_BIT(aq_hw, rpf_rss_key_wr_eni_adr,
-	    rpf_rss_key_wr_eni_msk, rpf_rss_key_wr_eni_shift);
+	return (AQ_READ_REG_BIT(aq_hw, rpf_rss_key_wr_eni_adr,
+	    rpf_rss_key_wr_eni_msk, rpf_rss_key_wr_eni_shift));
 }
 
 void
@@ -978,8 +978,8 @@ rpf_rss_redir_tbl_wr_data_set(struct aq_hw *aq_hw,
 uint32_t
 rpf_rss_redir_wr_en_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG_BIT(aq_hw, rpf_rss_redir_wr_eni_adr,
-	    rpf_rss_redir_wr_eni_msk, rpf_rss_redir_wr_eni_shift);
+	return (AQ_READ_REG_BIT(aq_hw, rpf_rss_redir_wr_eni_adr,
+	    rpf_rss_redir_wr_eni_msk, rpf_rss_redir_wr_eni_shift));
 }
 
 void
@@ -1605,8 +1605,8 @@ tdm_tx_desc_en_set(struct aq_hw *aq_hw, uint32_t tx_desc_en,
 uint32_t
 tdm_tx_desc_head_ptr_get(struct aq_hw *aq_hw, uint32_t descriptor)
 {
-	return AQ_READ_REG_BIT(aq_hw, tdm_descdhd_adr(descriptor),
-	    tdm_descdhd_msk, tdm_descdhd_shift);
+	return (AQ_READ_REG_BIT(aq_hw, tdm_descdhd_adr(descriptor),
+	    tdm_descdhd_msk, tdm_descdhd_shift));
 }
 
 void
@@ -1850,74 +1850,89 @@ tx_tx_reg_res_dis_set(struct aq_hw *aq_hw, uint32_t tx_reg_res_dis)
 }
 
 /* msm */
-uint32_t reg_mac_msm_rx_errs_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_rx_errs_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_rx_errs_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_rx_errs_cnt_adr));
 }
 
-uint32_t reg_mac_msm_rx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_rx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_rx_ucst_frm_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_rx_ucst_frm_cnt_adr));
 }
 
-uint32_t reg_mac_msm_rx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_rx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_rx_mcst_frm_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_rx_mcst_frm_cnt_adr));
 }
 
-uint32_t reg_mac_msm_rx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_rx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_rx_bcst_frm_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_rx_bcst_frm_cnt_adr));
 }
 
-uint32_t reg_mac_msm_rx_bcst_octets_counter1get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_rx_bcst_octets_counter1get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_rx_bcst_octets_counter1_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_rx_bcst_octets_counter1_adr));
 }
 
-uint32_t reg_mac_msm_rx_ucst_octets_counter0get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_rx_ucst_octets_counter0get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_rx_ucst_octets_counter0_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_rx_ucst_octets_counter0_adr));
 }
 
-uint32_t reg_mac_msm_tx_errs_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_tx_errs_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_tx_errs_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_tx_errs_cnt_adr));
 }
 
-uint32_t reg_mac_msm_tx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_tx_ucst_frm_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_tx_ucst_frm_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_tx_ucst_frm_cnt_adr));
 }
 
-uint32_t reg_mac_msm_tx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_tx_mcst_frm_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_tx_mcst_frm_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_tx_mcst_frm_cnt_adr));
 }
 
-uint32_t reg_mac_msm_tx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_tx_bcst_frm_cnt_get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_tx_bcst_frm_cnt_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_tx_bcst_frm_cnt_adr));
 }
 
-uint32_t reg_mac_msm_tx_mcst_octets_counter1get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_tx_mcst_octets_counter1get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_tx_mcst_octets_counter1_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_tx_mcst_octets_counter1_adr));
 }
 
-uint32_t reg_mac_msm_tx_bcst_octets_counter1get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_tx_bcst_octets_counter1get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_tx_bcst_octets_counter1_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_tx_bcst_octets_counter1_adr));
 }
 
-uint32_t reg_mac_msm_tx_ucst_octets_counter0get(struct aq_hw *aq_hw)
+uint32_t
+reg_mac_msm_tx_ucst_octets_counter0get(struct aq_hw *aq_hw)
 {
-    return AQ_READ_REG(aq_hw, mac_msm_tx_ucst_octets_counter0_adr);
+    return (AQ_READ_REG(aq_hw, mac_msm_tx_ucst_octets_counter0_adr));
 }
 
-uint32_t msm_reg_access_status_get(struct aq_hw *aq_hw) {
-	return AQ_READ_REG_BIT(aq_hw, msm_reg_access_busy_adr,
-	    msm_reg_access_busy_msk, msm_reg_access_busy_shift);
+uint32_t
+msm_reg_access_status_get(struct aq_hw *aq_hw)
+{
+	return (AQ_READ_REG_BIT(aq_hw, msm_reg_access_busy_adr,
+	    msm_reg_access_busy_msk, msm_reg_access_busy_shift));
 }
 
 void
@@ -1938,7 +1953,7 @@ msm_reg_rd_strobe_set(struct aq_hw *aq_hw, uint32_t reg_rd_strobe)
 uint32_t
 msm_reg_rd_data_get(struct aq_hw *aq_hw)
 {
-	return AQ_READ_REG(aq_hw, msm_reg_rd_data_adr);
+	return (AQ_READ_REG(aq_hw, msm_reg_rd_data_adr));
 }
 
 void
@@ -1965,8 +1980,8 @@ pci_pci_reg_res_dis_set(struct aq_hw *aq_hw, uint32_t pci_reg_res_dis)
 uint32_t
 reg_glb_cpu_scratch_scp_get(struct aq_hw *hw, uint32_t glb_cpu_scratch_scp_idx)
 {
-	return AQ_READ_REG(hw,
-	    glb_cpu_scratch_scp_adr(glb_cpu_scratch_scp_idx));
+	return (AQ_READ_REG(hw,
+	    glb_cpu_scratch_scp_adr(glb_cpu_scratch_scp_idx)));
 }
 void
 reg_glb_cpu_scratch_scp_set(struct aq_hw *aq_hw, uint32_t glb_cpu_scratch_scp,
@@ -1979,7 +1994,7 @@ reg_glb_cpu_scratch_scp_set(struct aq_hw *aq_hw, uint32_t glb_cpu_scratch_scp,
 uint32_t
 reg_glb_cpu_no_reset_scratchpad_get(struct aq_hw *hw, uint32_t index)
 {
-	return AQ_READ_REG(hw, glb_cpu_no_reset_scratchpad_adr(index));
+	return (AQ_READ_REG(hw, glb_cpu_no_reset_scratchpad_adr(index)));
 }
 void
 reg_glb_cpu_no_reset_scratchpad_set(struct aq_hw* hw, uint32_t value,
@@ -1997,7 +2012,7 @@ reg_mif_power_gating_enable_control_set(struct aq_hw* hw, uint32_t value)
 uint32_t
 reg_mif_power_gating_enable_control_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, mif_power_gating_enable_control_adr);
+	return (AQ_READ_REG(hw, mif_power_gating_enable_control_adr));
 }
 
 
@@ -2009,7 +2024,7 @@ reg_glb_general_provisioning9_set(struct aq_hw* hw, uint32_t value)
 uint32_t
 reg_glb_general_provisioning9_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, glb_general_provisioning9_adr);
+	return (AQ_READ_REG(hw, glb_general_provisioning9_adr));
 }
 
 void
@@ -2020,7 +2035,7 @@ reg_glb_nvr_provisioning2_set(struct aq_hw* hw, uint32_t value)
 uint32_t
 reg_glb_nvr_provisioning2_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, glb_nvr_provisioning2_adr);
+	return (AQ_READ_REG(hw, glb_nvr_provisioning2_adr));
 }
 
 void
@@ -2031,15 +2046,15 @@ reg_glb_nvr_interface1_set(struct aq_hw* hw, uint32_t value)
 uint32_t
 reg_glb_nvr_interface1_get(struct aq_hw* hw)
 {
-	return AQ_READ_REG(hw, glb_nvr_interface1_adr);
+	return (AQ_READ_REG(hw, glb_nvr_interface1_adr));
 }
 
 /* get mif up mailbox busy */
 uint32_t
 mif_mcp_up_mailbox_busy_get(struct aq_hw *hw)
 {
-	return AQ_READ_REG_BIT(hw, mif_mcp_up_mailbox_busy_adr,
-	    mif_mcp_up_mailbox_busy_msk, mif_mcp_up_mailbox_busy_shift);
+	return (AQ_READ_REG_BIT(hw, mif_mcp_up_mailbox_busy_adr,
+	    mif_mcp_up_mailbox_busy_msk, mif_mcp_up_mailbox_busy_shift));
 }
 
 /* set mif up mailbox execute operation */
@@ -2054,7 +2069,7 @@ mif_mcp_up_mailbox_execute_operation_set(struct aq_hw* hw, uint32_t value)
 uint32_t
 mif_mcp_up_mailbox_addr_get(struct aq_hw *hw)
 {
-	return AQ_READ_REG(hw, mif_mcp_up_mailbox_addr_adr);
+	return (AQ_READ_REG(hw, mif_mcp_up_mailbox_addr_adr));
 }
 /* set mif uP mailbox address */
 void
@@ -2067,15 +2082,18 @@ mif_mcp_up_mailbox_addr_set(struct aq_hw *hw, uint32_t value)
 uint32_t
 mif_mcp_up_mailbox_data_get(struct aq_hw *hw)
 {
-	return AQ_READ_REG(hw, mif_mcp_up_mailbox_data_adr);
+	return (AQ_READ_REG(hw, mif_mcp_up_mailbox_data_adr));
 }
 
-void mif_mcp_up_mailbox_data_set(struct aq_hw *hw, uint32_t value)
+void
+mif_mcp_up_mailbox_data_set(struct aq_hw *hw, uint32_t value)
 {
     AQ_WRITE_REG(hw, mif_mcp_up_mailbox_data_adr, value);
 }
 
-void hw_atl_rpfl3l4_ipv4_dest_addr_clear(struct aq_hw_s *aq_hw, uint8_t location) {
+void
+hw_atl_rpfl3l4_ipv4_dest_addr_clear(struct aq_hw_s *aq_hw, uint8_t location)
+{
 	aq_hw_write_reg(aq_hw, HW_ATL_RX_GET_ADDR_DESTA_FL3L4(location), 0U);
 }
 
@@ -2133,8 +2151,10 @@ hw_atl_rpfl3l4_cmd_set(struct aq_hw_s *aq_hw, uint8_t location, uint32_t cmd)
 	aq_hw_write_reg(aq_hw, HW_ATL_RX_GET_ADDR_CTRL_FL3L4(location), cmd);
 }
 
-void hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
-				      const uint32_t *ipv6_src) {
+void
+hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
+    const uint32_t *ipv6_src)
+{
 	int i;
 
 	for (i = 0; i < 4; ++i)
@@ -2142,8 +2162,10 @@ void hw_atl_rpfl3l4_ipv6_src_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
 		    HW_ATL_RX_GET_ADDR_SRCA_FL3L4(location + i), ipv6_src[i]);
 }
 
-void hw_atl_rpfl3l4_ipv6_dest_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
-				       const uint32_t *ipv6_dest) {
+void
+hw_atl_rpfl3l4_ipv6_dest_addr_set(struct aq_hw_s *aq_hw, uint8_t location,
+    const uint32_t *ipv6_dest)
+{
 	int i;
 
 	for (i = 0; i < 4; ++i)

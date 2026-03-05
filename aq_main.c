@@ -412,7 +412,7 @@ aq_rss_prepare(struct aq_dev *softc, uint32_t *rss_hash_cfg)
 static bool
 aq_rss_udp_enabled(uint32_t rss_hash_cfg)
 {
-	return aq_enable_rss_udp && ((rss_hash_cfg & AQ_RSS_UDP_HASH_TYPES) != 0);
+	return (aq_enable_rss_udp && ((rss_hash_cfg & AQ_RSS_UDP_HASH_TYPES) != 0));
 }
 
 static int
@@ -985,7 +985,8 @@ aq_if_get_counter(if_ctx_t ctx, ift_counter cnt)
 	}
 }
 
-static int aq_mc_slots(struct aq_hw *hw)
+static int
+aq_mc_slots(struct aq_hw *hw)
 {
 	return ((int)(aq_hw_mac_max(hw) - AQ_HW_MAC_MIN));
 }
@@ -1379,7 +1380,8 @@ aq_update_vlan_filters(struct aq_dev *softc)
 	}
 }
 
-static void aq_apply_rx_filters(struct aq_dev *softc)
+static void
+aq_apply_rx_filters(struct aq_dev *softc)
 {
 	struct aq_hw *hw = &softc->hw;
 	int i;
@@ -1559,7 +1561,8 @@ aq_sysctl_print_rss_config(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int temp;
@@ -1569,10 +1572,11 @@ static int aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS)
 	if (err != 0)
 		return (err < 0 ? -err : err);
 
-	return sysctl_handle_int(oidp, &temp, 0, req);
+	return (sysctl_handle_int(oidp, &temp, 0, req));
 }
 
-static int aq_sysctl_cable_len(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_cable_len(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	uint8_t len = 0;
@@ -1584,10 +1588,11 @@ static int aq_sysctl_cable_len(SYSCTL_HANDLER_ARGS)
 		return (err < 0 ? -err : err);
 
 	val = len;
-	return sysctl_handle_int(oidp, &val, 0, req);
+	return (sysctl_handle_int(oidp, &val, 0, req));
 }
 
-static int aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	uint32_t lane_data[4];
@@ -1600,10 +1605,11 @@ static int aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS)
 
 	snprintf(buf, sizeof(buf), "0x%08x 0x%08x 0x%08x 0x%08x",
 	    lane_data[0], lane_data[1], lane_data[2], lane_data[3]);
-	return sysctl_handle_string(oidp, buf, 0, req);
+	return (sysctl_handle_string(oidp, buf, 0, req));
 }
 
-static int aq_parse_u32(const char *val, uint32_t *out)
+static int
+aq_parse_u32(const char *val, uint32_t *out)
 {
 	char *endp;
 	unsigned long v;
@@ -1619,7 +1625,8 @@ static int aq_parse_u32(const char *val, uint32_t *out)
 	return (0);
 }
 
-static int aq_parse_s32(const char *val, int *out)
+static int
+aq_parse_s32(const char *val, int *out)
 {
 	char *endp;
 	long v;
@@ -1635,7 +1642,8 @@ static int aq_parse_s32(const char *val, int *out)
 	return (0);
 }
 
-static int aq_parse_ipv6_hex(const char *val, uint32_t out[4])
+static int
+aq_parse_ipv6_hex(const char *val, uint32_t out[4])
 {
 	char buf[9];
 	const char *p = val;
@@ -1664,7 +1672,8 @@ static int aq_parse_ipv6_hex(const char *val, uint32_t out[4])
 	return (0);
 }
 
-static int aq_parse_bool(const char *val, bool *out)
+static int
+aq_parse_bool(const char *val, bool *out)
 {
 	uint32_t v;
 	int err;
@@ -1678,7 +1687,8 @@ static int aq_parse_bool(const char *val, bool *out)
 	return (0);
 }
 
-static const char *aq_proto_name(uint32_t cmd)
+static const char *
+aq_proto_name(uint32_t cmd)
 {
 	uint32_t proto = cmd & 0x7U;
 
@@ -1698,7 +1708,8 @@ static const char *aq_proto_name(uint32_t cmd)
 	}
 }
 
-static int aq_parse_proto(const char *val, int *proto, bool *cmp)
+static int
+aq_parse_proto(const char *val, int *proto, bool *cmp)
 {
 	if (val == NULL || val[0] == '\0')
 		return (EINVAL);
@@ -1730,7 +1741,8 @@ static int aq_parse_proto(const char *val, int *proto, bool *cmp)
 	return (EINVAL);
 }
 
-static const char *aq_action_name(uint32_t cmd)
+static const char *
+aq_action_name(uint32_t cmd)
 {
 	uint32_t action = (cmd >> HW_ATL_RX_BOFFSET_ACTION_FL3F4) & 0x7U;
 
@@ -1743,7 +1755,8 @@ static const char *aq_action_name(uint32_t cmd)
 	}
 }
 
-static int aq_parse_action(const char *val, int *action)
+static int
+aq_parse_action(const char *val, int *action)
 {
 	if (val == NULL || val[0] == '\0')
 		return (EINVAL);
@@ -1758,7 +1771,8 @@ static int aq_parse_action(const char *val, int *action)
 	return (EINVAL);
 }
 
-static int aq_sysctl_l2_filter(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_l2_filter(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int location = (int)arg2;
@@ -1857,7 +1871,8 @@ static int aq_sysctl_l2_filter(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_vlan_filter(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_vlan_filter(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int location = (int)arg2;
@@ -1954,7 +1969,8 @@ static int aq_sysctl_vlan_filter(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_wol_phy(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_wol_phy(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int val;
@@ -1972,7 +1988,8 @@ static int aq_sysctl_wol_phy(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	if_t ifp = iflib_get_ifp(softc->ctx);
@@ -2014,7 +2031,8 @@ static int aq_sysctl_wol_mask(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_downshift(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_downshift(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int val;
@@ -2037,7 +2055,8 @@ static int aq_sysctl_downshift(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int val;
@@ -2060,7 +2079,8 @@ static int aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_loopback(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_loopback(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int val;
@@ -2161,7 +2181,8 @@ aq_sysctl_itr(SYSCTL_HANDLER_ARGS)
 	return (aq_sysctl_apply_itr(softc, hw->itr_mode, itr_tx, itr_rx));
 }
 
-static int aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	int location = (int)arg2;
@@ -2378,7 +2399,8 @@ static int aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	uint32_t rate = 0;
@@ -2407,7 +2429,8 @@ static int aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
-static int aq_sysctl_eee_supported(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_eee_supported(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	uint32_t rate = 0;
@@ -2421,10 +2444,11 @@ static int aq_sysctl_eee_supported(SYSCTL_HANDLER_ARGS)
 		return (err < 0 ? -err : err);
 
 	val = (int)supported;
-	return sysctl_handle_int(oidp, &val, 0, req);
+	return (sysctl_handle_int(oidp, &val, 0, req));
 }
 
-static int aq_sysctl_eee_lp_rate(SYSCTL_HANDLER_ARGS)
+static int
+aq_sysctl_eee_lp_rate(SYSCTL_HANDLER_ARGS)
 {
 	struct aq_dev *softc = (struct aq_dev *)arg1;
 	uint32_t rate = 0;
@@ -2438,10 +2462,12 @@ static int aq_sysctl_eee_lp_rate(SYSCTL_HANDLER_ARGS)
 		return (err < 0 ? -err : err);
 
 	val = (int)lp;
-	return sysctl_handle_int(oidp, &val, 0, req);
+	return (sysctl_handle_int(oidp, &val, 0, req));
 }
 
-static int aq_sysctl_print_tx_head(SYSCTL_HANDLER_ARGS) {
+static int
+aq_sysctl_print_tx_head(SYSCTL_HANDLER_ARGS)
+{
 	struct aq_ring  *ring = arg1;
 	int             error = 0;
 	unsigned int   val;

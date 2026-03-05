@@ -143,12 +143,12 @@ aq_fw_reset(struct aq_hw* hw)
 	case boot_mode_flb:
 		aq_log("FLB> F/W successfully loaded from flash.");
 		hw->flash_present = true;
-		return wait_init_mac_firmware_(hw);
+		return (wait_init_mac_firmware_(hw));
 
 	case boot_mode_rbl_flash:
 		aq_log("RBL> F/W loaded from flash. Host Bootload disabled.");
 		hw->flash_present = true;
-		return wait_init_mac_firmware_(hw);
+		return (wait_init_mac_firmware_(hw));
 
 	case boot_mode_unknown:
 		aq_log_error("F/W bootload error: unknown bootloader type");
@@ -206,12 +206,12 @@ int
 mac_soft_reset_(struct aq_hw* hw, aq_fw_bootloader_mode* mode /*= nullptr*/)
 {
 	if (hw->rbl_enabled) {
-		return mac_soft_reset_rbl_(hw, mode);
+		return (mac_soft_reset_rbl_(hw, mode));
 	} else {
 		if (mode)
 			*mode = boot_mode_flb;
 
-		return mac_soft_reset_flb_(hw);
+		return (mac_soft_reset_flb_(hw));
 	}
 }
 

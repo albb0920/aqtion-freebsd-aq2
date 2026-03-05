@@ -198,7 +198,8 @@ trace_aq_tx_context_descr(int ring_idx, unsigned int pointer,
 }
 
 void
-DumpHex(const void* data, size_t size) {
+DumpHex(const void *data, size_t size)
+{
 #if AQ_CFG_DEBUG_LVL > 3
 	char ascii[17];
 	size_t i, j;

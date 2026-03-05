@@ -667,7 +667,7 @@ aq_hw_mpi_set(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e state, uint32_t speed)
 int
 aq_hw_set_link_speed(struct aq_hw *hw, uint32_t speed)
 {
-	return aq_hw_mpi_set(hw, MPI_INIT, speed);
+	return (aq_hw_mpi_set(hw, MPI_INIT, speed));
 }
 
 int
@@ -798,35 +798,40 @@ aq_hw_set_power(struct aq_hw *hw, unsigned int power_state)
 	return (0);
 }
 
-int aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c)
+int
+aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c)
 {
 	if (hw->fw_ops && hw->fw_ops->get_phy_temp)
 		return (hw->fw_ops->get_phy_temp(hw, temp_c));
 	return (-ENOTSUP);
 }
 
-int aq_hw_get_cable_len(struct aq_hw *hw, uint8_t *len)
+int
+aq_hw_get_cable_len(struct aq_hw *hw, uint8_t *len)
 {
 	if (hw->fw_ops && hw->fw_ops->get_cable_len)
 		return (hw->fw_ops->get_cable_len(hw, len));
 	return (-ENOTSUP);
 }
 
-int aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4])
+int
+aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4])
 {
 	if (hw->fw_ops && hw->fw_ops->get_cable_diag)
 		return (hw->fw_ops->get_cable_diag(hw, lane_data));
 	return (-ENOTSUP);
 }
 
-int aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
+int
+aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 {
 	if (hw->fw_ops && hw->fw_ops->set_eee_rate)
 		return (hw->fw_ops->set_eee_rate(hw, rate));
 	return (-ENOTSUP);
 }
 
-int aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
+int
+aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
 	uint32_t *lp_rate)
 {
 	if (hw->fw_ops && hw->fw_ops->get_eee_rate)
@@ -1284,14 +1289,14 @@ hw_atl_b0_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)
 		}
 	}
 
-	return aq_hw_err_from_flags(self);
+	return (aq_hw_err_from_flags(self));
 }
 
 int
 hw_atl_b0_hw_vlan_promisc_set(struct aq_hw_s *self, bool promisc)
 {
 	hw_atl_rpf_vlan_prom_mode_en_set(self, promisc);
-	return aq_hw_err_from_flags(self);
+	return (aq_hw_err_from_flags(self));
 }
 
 static void
@@ -1301,7 +1306,8 @@ aq2_rpf_vlan_tag_set(struct aq_hw_s *self, uint32_t tag, uint32_t filter)
 	    AQ2_RPF_VL_TAG_MSK, AQ2_RPF_VL_TAG_SHIFT, tag);
 }
 
-int aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc)
+int
+aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc)
 {
 	bool l2_promisc = AQ_READ_REG_BIT(self, rpfl2promis_mode_adr,
 	    rpfl2promis_mode_msk, rpfl2promis_mode_shift) != 0U;
@@ -1318,7 +1324,8 @@ int aq2_hw_vlan_promisc_set(struct aq_hw_s *self, bool vlan_promisc)
 	return (aq_hw_err_from_flags(self));
 }
 
-int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)
+int
+aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)
 {
 	uint32_t action;
 	uint32_t index;
@@ -1359,7 +1366,8 @@ int aq2_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)
 	return (aq_hw_err_from_flags(self));
 }
 
-static void aq_hw_l2_route_set(struct aq_hw *hw,
+static void
+aq_hw_l2_route_set(struct aq_hw *hw,
 	const struct aq_rx_filter_l2 *data, bool enabled)
 {
 	uint32_t route_enable = 0U;
@@ -1373,7 +1381,8 @@ static void aq_hw_l2_route_set(struct aq_hw *hw,
 		hw_atl_rpf_etht_rx_queue_set(hw, data->queue, data->location);
 }
 
-static void aq_hw_l2_filter_write(struct aq_hw *hw,
+static void
+aq_hw_l2_filter_write(struct aq_hw *hw,
 	const struct aq_rx_filter_l2 *data, bool enabled)
 {
 	uint32_t filter_enable = enabled ? 1U : 0U;
@@ -1389,7 +1398,8 @@ static void aq_hw_l2_filter_write(struct aq_hw *hw,
 	aq_hw_l2_route_set(hw, data, enabled);
 }
 
-int aq_hw_filter_l2_set(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
+int
+aq_hw_filter_l2_set(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 {
 	if (AQ_HW_IS_AQ2(hw))
 		return (-ENOTSUP);
@@ -1398,7 +1408,8 @@ int aq_hw_filter_l2_set(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 	return (aq_hw_err_from_flags(hw));
 }
 
-int aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
+int
+aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 {
 	if (AQ_HW_IS_AQ2(hw))
 		return (-ENOTSUP);
@@ -1407,14 +1418,16 @@ int aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 	return (aq_hw_err_from_flags(hw));
 }
 
-static void aq_hw_l3l4_slot_clear(struct aq_hw *hw, uint8_t location)
+static void
+aq_hw_l3l4_slot_clear(struct aq_hw *hw, uint8_t location)
 {
 	hw_atl_rpfl3l4_cmd_clear(hw, location);
 	hw_atl_rpf_l4_spd_set(hw, 0U, location);
 	hw_atl_rpf_l4_dpd_set(hw, 0U, location);
 }
 
-static void aq_hw_l3l4_rule_clear(struct aq_hw *hw,
+static void
+aq_hw_l3l4_rule_clear(struct aq_hw *hw,
 	const struct aq_rx_filter_l3l4 *data)
 {
 	uint8_t location = data->location;
@@ -1433,7 +1446,8 @@ static void aq_hw_l3l4_rule_clear(struct aq_hw *hw,
 	hw_atl_rpfl3l4_ipv6_dest_addr_clear(hw, location);
 }
 
-static void aq_hw_l3l4_addr_set(struct aq_hw *hw,
+static void
+aq_hw_l3l4_addr_set(struct aq_hw *hw,
 	const struct aq_rx_filter_l3l4 *data)
 {
 	uint8_t location = data->location;
@@ -1453,7 +1467,8 @@ static void aq_hw_l3l4_addr_set(struct aq_hw *hw,
 	hw_atl_rpfl3l4_ipv4_src_addr_set(hw, location, data->ip_src[0]);
 }
 
-static void aq_hw_l3l4_ports_set(struct aq_hw *hw,
+static void
+aq_hw_l3l4_ports_set(struct aq_hw *hw,
 	const struct aq_rx_filter_l3l4 *data)
 {
 	uint8_t location = data->location;
@@ -1467,7 +1482,8 @@ static void aq_hw_l3l4_ports_set(struct aq_hw *hw,
 	hw_atl_rpf_l4_spd_set(hw, data->p_src, location);
 }
 
-int aq_hw_filter_l3l4_clear(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
+int
+aq_hw_filter_l3l4_clear(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
 {
 	if (AQ_HW_IS_AQ2(hw))
 		return (-ENOTSUP);
@@ -1476,7 +1492,8 @@ int aq_hw_filter_l3l4_clear(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
 	return (aq_hw_err_from_flags(hw));
 }
 
-int aq_hw_filter_l3l4_set(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
+int
+aq_hw_filter_l3l4_set(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
 {
 	int err;
 
