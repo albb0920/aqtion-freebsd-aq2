@@ -490,6 +490,8 @@ aq_if_attach_pre(if_ctx_t ctx)
 	hw->rpc_len = 0;
 	memset(hw->rpc_buf, 0, sizeof(hw->rpc_buf));
 	hw->settings_addr = 0;
+	mtx_init(&softc->aq2_fw_request_mtx, "aq2 fwreq", NULL, MTX_DEF);
+
 	for (int i = 0; i < AQ_HW_ETYPE_MAX_FILTERS; i++) {
 		softc->rx_filters.etype_filters[i].queue = -1;
 		softc->rx_filters.etype_filters[i].location = (uint8_t)i;
@@ -589,6 +591,9 @@ aq_if_attach_pre(if_ctx_t ctx)
 	return (rc);
 
 fail:
+	if (mtx_initialized(&softc->aq2_fw_request_mtx))
+		mtx_destroy(&softc->aq2_fw_request_mtx);
+
 	if (softc->mmio_res != NULL)
 		bus_release_resource(softc->dev, SYS_RES_MEMORY,
 		    softc->mmio_rid, softc->mmio_res);
@@ -665,6 +670,8 @@ aq_if_detach(if_ctx_t ctx)
 		iflib_irq_free(ctx, &softc->rx_rings[i]->irq);
 	iflib_irq_free(ctx, &softc->irq);
 
+	if (mtx_initialized(&softc->aq2_fw_request_mtx))
+		mtx_destroy(&softc->aq2_fw_request_mtx);
 
 	if (softc->mmio_res != NULL)
 		bus_release_resource(softc->dev, SYS_RES_MEMORY,
