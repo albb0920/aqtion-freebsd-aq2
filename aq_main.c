@@ -939,10 +939,20 @@ aq_if_init(if_ctx_t ctx)
 	aq_hw_udp_rss_enable(hw, udp_rss_enable);
 	aq_hw_set_link_speed(hw, hw->link_rate);
 	aq_hw_set_eee_rate(hw, hw->eee_rate);
+
+	err = aq_hw_set_downshift(hw, softc->downshift);
+	if (err != 0 && err != ENOTSUP) {
+		device_printf(softc->dev, "atlantic: aq_hw_set_downshift: %d\n",
+		    err);
+	}
+
 	if (hw->fw_ops == &aq_fw2x_ops) {
-		if (softc->downshift)
-			fw2x_set_downshift(hw, softc->downshift);
-		fw2x_set_media_detect(hw, softc->media_detect);
+		err = fw2x_set_media_detect(hw, softc->media_detect);
+		if (err != 0 && err != ENOTSUP) {
+			device_printf(softc->dev,
+			    "atlantic: fw2x_set_media_detect: %d\n", err);
+		}
+
 		fw2x_set_loopback(hw, softc->loopback_mode);
 	}
 
@@ -2077,12 +2087,10 @@ aq_sysctl_downshift(SYSCTL_HANDLER_ARGS)
 	err = sysctl_handle_int(oidp, &val, 0, req);
 	if (err || !req->newptr)
 		return (err);
-	if (val < 0)
+	if (val < 0 || val > (int)AQ_DOWNSHIFT_MAX)
 		return (EINVAL);
 
-	if (softc->hw.fw_ops != &aq_fw2x_ops)
-		return (ENOTSUP);
-	err = fw2x_set_downshift(&softc->hw, (uint32_t)val);
+	err = aq_hw_set_downshift(&softc->hw, (uint32_t)val);
 	if (err != 0)
 		return (err);
 

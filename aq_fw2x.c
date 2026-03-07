@@ -542,13 +542,15 @@ fw2x_rpc_call(struct aq_hw *hw, const void *buf, uint32_t len)
 	return (0);
 }
 
-int
+static int
 fw2x_set_downshift(struct aq_hw *hw, uint32_t counter)
 {
 	uint32_t mpi_opts;
 	uint32_t offset;
 	int err;
 
+	if (counter > AQ_DOWNSHIFT_MAX)
+		return (EINVAL);
 	if ((hw->fw_caps & FW2X_CAP_DOWNSHIFT) == 0)
 		return (ENOTSUP);
 	offset = offsetof(struct fw2x_settings, downshift_retry_count);
@@ -1072,6 +1074,7 @@ struct aq_firmware_ops aq_fw2x_ops =
 	.get_phy_temp = fw2x_get_phy_temp,
 	.get_cable_len = fw2x_get_cable_len,
 	.get_cable_diag = fw2x_get_cable_diag,
+	.set_downshift = fw2x_set_downshift,
 	.set_eee_rate = fw2x_set_eee_rate,
 	.get_eee_rate = fw2x_get_eee_rate,
 };
