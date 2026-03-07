@@ -632,7 +632,7 @@ aq_if_attach_post(if_ctx_t ctx)
 
 	/*
 	 * aq_if_init is only called when brought up by ifconfig up.
-	 * Without this, there will be no carrier after kldload.
+	 * Without this, ifconfig carrier state after kldload is misleading.
 	 */
 	err = aq_hw_set_link_speed(&softc->hw, softc->hw.link_rate);
 	if (err != EOK) {
