@@ -35,6 +35,8 @@
 #ifndef _AQ_DEVICE_H_
 #define _AQ_DEVICE_H_
 
+#include <sys/mutex.h>
+
 #include "aq_hw.h"
 #include "aq_stats.h"
 
@@ -89,6 +91,7 @@ struct aq_dev {
 	struct ifmedia *	media;
 
 	struct aq_hw		hw;
+	struct mtx		aq2_fw_request_mtx;
 
 	enum aq_media_type	media_type;
 	uint32_t		link_speeds;

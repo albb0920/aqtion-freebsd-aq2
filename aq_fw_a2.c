@@ -108,6 +108,12 @@ extern const struct aq_firmware_ops aq_fw_a2_ops;
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5	BIT(18)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G	BIT(17)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M	BIT(16)
+#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE		\
+	(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G |	\
+	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G |	\
+	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5 |	\
+	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G |	\
+	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10G	BIT(15)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N5G	BIT(14)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_5G	BIT(13)
@@ -593,6 +599,24 @@ aq2_interface_buffer_read(struct aq_hw *hw, uint32_t reg0, uint32_t *data0,
 	return (0);
 }
 
+static void
+aq2_fw_request_lock(struct aq_hw *hw)
+{
+	struct aq_dev *softc;
+
+	softc = (struct aq_dev *)hw->aq_dev;
+	mtx_lock(&softc->aq2_fw_request_mtx);
+}
+
+static void
+aq2_fw_request_unlock(struct aq_hw *hw)
+{
+	struct aq_dev *softc;
+
+	softc = (struct aq_dev *)hw->aq_dev;
+	mtx_unlock(&softc->aq2_fw_request_mtx);
+}
+
 static int
 aq2_fw_wait_shared_ack(struct aq_hw *hw)
 {
@@ -610,6 +634,41 @@ aq2_fw_wait_shared_ack(struct aq_hw *hw)
 	}
 
 	return (ETIMEDOUT);
+}
+
+static uint32_t
+aq2_fw_link_options_read(struct aq_hw *hw)
+{
+	return (AQ_READ_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG));
+}
+
+static int
+aq2_fw_link_options_write(struct aq_hw *hw, uint32_t link_options)
+{
+	mtx_assert(&((struct aq_dev *)hw->aq_dev)->aq2_fw_request_mtx,
+	    MA_OWNED);
+
+	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG, link_options);
+	return (aq2_fw_wait_shared_ack(hw));
+}
+
+static int
+aq2_fw_link_options_update(struct aq_hw *hw, uint32_t clear_mask,
+    uint32_t set_bits)
+{
+	uint32_t link_options;
+	int err;
+
+	aq2_fw_request_lock(hw);
+
+	link_options = aq2_fw_link_options_read(hw);
+	link_options &= ~clear_mask;
+	link_options |= set_bits;
+
+	err = aq2_fw_link_options_write(hw, link_options);
+	aq2_fw_request_unlock(hw);
+
+	return (err);
 }
 
 int
@@ -705,6 +764,8 @@ aq2_fw_reset(struct aq_hw *hw)
 	uint32_t v;
 	int err;
 
+	aq2_fw_request_lock(hw);
+
 	AQ_WRITE_REG_BIT(hw, AQ2_FW_INTERFACE_IN_LINK_CONTROL_REG,
 	    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE, 0,
 	    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_ACTIVE);
@@ -724,6 +785,7 @@ aq2_fw_reset(struct aq_hw *hw)
 	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_REQUEST_POLICY_REG, v);
 
 	err = aq2_fw_wait_shared_ack(hw);
+	aq2_fw_request_unlock(hw);
 	return (err);
 }
 
@@ -752,10 +814,13 @@ static int
 aq2_fw_set_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e mode,
     aq_fw_link_speed_t speed)
 {
-	uint32_t v;
+	int err;
+	uint32_t link_options;
 
-	v = AQ_READ_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG);
-	v &= ~(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10G |
+	aq2_fw_request_lock(hw);
+
+	link_options = aq2_fw_link_options_read(hw);
+	link_options &= ~(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10G |
 	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N5G |
 	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_5G |
 	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N2G5 |
@@ -767,49 +832,45 @@ aq2_fw_set_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e mode,
 	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_100M_HD |
 	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10M_HD);
 
-	v &= ~AQ2_FW_INTERFACE_IN_LINK_OPTIONS_LINK_UP;
+	link_options &= ~AQ2_FW_INTERFACE_IN_LINK_OPTIONS_LINK_UP;
 
 	if (speed & aq_fw_10G)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10G;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10G;
 	if (speed & aq_fw_5G)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N5G |
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N5G |
 		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_5G;
 	if (speed & aq_fw_2G5)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N2G5 |
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N2G5 |
 		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_2G5;
 	if (speed & aq_fw_1G)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_1G |
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_1G |
 		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_1G_HD;
 	if (speed & aq_fw_100M)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_100M |
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_100M |
 		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_100M_HD;
 	if (speed & aq_fw_10M)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10M |
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10M |
 		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10M_HD;
 
-	v &= ~(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_TX |
+	link_options &= ~(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_TX |
 	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_RX);
 	if (hw->fc.fc_tx)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_TX;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_TX;
 	if (hw->fc.fc_rx)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_RX;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_RX;
 
 	if (mode == MPI_INIT) {
-		v &= ~(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G |
-		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G |
-		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5 |
-		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G |
-		    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M);
+		link_options &= ~AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE;
 		if (hw->eee_rate & AQ_EEE_10G)
-			v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G;
+			link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G;
 		if (hw->eee_rate & AQ_EEE_5G)
-			v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G;
+			link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G;
 		if (hw->eee_rate & AQ_EEE_2G5)
-			v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5;
+			link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5;
 		if (hw->eee_rate & AQ_EEE_1G)
-			v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G;
+			link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G;
 		if (hw->eee_rate & AQ_EEE_100M)
-			v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M;
+			link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M;
 	}
 
 	if (mode == MPI_DEINIT || speed == aq_fw_none) {
@@ -820,11 +881,13 @@ aq2_fw_set_mode(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e mode,
 		AQ_WRITE_REG_BIT(hw, AQ2_FW_INTERFACE_IN_LINK_CONTROL_REG,
 		    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE, 0,
 		    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_ACTIVE);
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_LINK_UP;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_LINK_UP;
 	}
 
-	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG, v);
-	return (aq2_fw_wait_shared_ack(hw));
+	err = aq2_fw_link_options_write(hw, link_options);
+	aq2_fw_request_unlock(hw);
+
+	return (err);
 }
 
 static int
@@ -961,6 +1024,7 @@ aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 	uint32_t *data;
 	uint32_t reg;
 	uint32_t size;
+	int err;
 
 	memset(&wol, 0, sizeof(wol));
 	if (wol_flags & AQ_WOL_MAGIC)
@@ -972,6 +1036,8 @@ aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 	memcpy(mac_addr, mac, ETHER_ADDR_LEN);
 	mac_addr[0] = htole32(mac_addr[0]);
 	mac_addr[1] = htole32(mac_addr[1]);
+
+	aq2_fw_request_lock(hw);
 
 	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_MAC_ADDRESS_REG, mac_addr[0]);
 	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_MAC_ADDRESS_REG + 4u, mac_addr[1]);
@@ -986,7 +1052,10 @@ aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 	    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE, 0,
 	    AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_SLEEP_PROXY);
 
-	return (aq2_fw_wait_shared_ack(hw));
+	err = aq2_fw_wait_shared_ack(hw);
+	aq2_fw_request_unlock(hw);
+
+	return (err);
 }
 
 static int
@@ -1051,19 +1120,19 @@ aq2_eee_mask_from_lkp(const struct aq2_lkp_link_caps *caps)
 }
 
 static uint32_t
-aq2_eee_mask_from_link_options(uint32_t v)
+aq2_eee_mask_from_link_options(uint32_t link_options)
 {
 	uint32_t rate = 0;
 
-	if (v & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G)
+	if (link_options & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G)
 		rate |= AQ_EEE_10G;
-	if (v & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G)
+	if (link_options & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G)
 		rate |= AQ_EEE_5G;
-	if (v & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5)
+	if (link_options & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5)
 		rate |= AQ_EEE_2G5;
-	if (v & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G)
+	if (link_options & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G)
 		rate |= AQ_EEE_1G;
-	if (v & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M)
+	if (link_options & AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M)
 		rate |= AQ_EEE_100M;
 
 	return (rate);
@@ -1072,28 +1141,21 @@ aq2_eee_mask_from_link_options(uint32_t v)
 static int
 aq2_fw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 {
-	uint32_t v;
-
-	v = AQ_READ_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG);
-	v &= ~(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G |
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G |
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5 |
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G |
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M);
+	uint32_t link_options = 0;
 
 	if (rate & AQ_EEE_10G)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G;
 	if (rate & AQ_EEE_5G)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G;
 	if (rate & AQ_EEE_2G5)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5;
 	if (rate & AQ_EEE_1G)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G;
 	if (rate & AQ_EEE_100M)
-		v |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M;
+		link_options |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M;
 
-	AQ_WRITE_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG, v);
-	return (aq2_fw_wait_shared_ack(hw));
+	return (aq2_fw_link_options_update(hw,
+	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE, link_options));
 }
 
 static int
@@ -1102,13 +1164,13 @@ aq2_fw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
 {
 	struct aq2_device_link_caps dev_caps;
 	struct aq2_lkp_link_caps lkp_caps;
-	uint32_t v;
+	uint32_t link_options;
 	uint32_t reg;
 	int err;
 
 	if (rate) {
-		v = AQ_READ_REG(hw, AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG);
-		*rate = aq2_eee_mask_from_link_options(v);
+		link_options = aq2_fw_link_options_read(hw);
+		*rate = aq2_eee_mask_from_link_options(link_options);
 	}
 
 	if (supported) {
