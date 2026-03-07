@@ -409,6 +409,7 @@ int aq_hw_set_power(struct aq_hw *hw, unsigned int power_state);
 int aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c);
 int aq_hw_get_cable_len(struct aq_hw *hw, uint8_t *len);
 int aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4]);
+int aq_hw_set_downshift(struct aq_hw *hw, uint32_t counter);
 int aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate);
 int aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate,
     uint32_t *supported, uint32_t *lp_rate);

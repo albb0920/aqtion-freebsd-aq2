@@ -103,6 +103,10 @@ extern const struct aq_firmware_ops aq_fw_a2_ops;
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG		0x12018u
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_TX	BIT(25)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_RX	BIT(24)
+#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_EN	BIT(27)
+#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT	0xf8000000u
+#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_RETRY	0xf0000000u
+#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_RETRY_S	28
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G	BIT(20)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G	BIT(19)
 #define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5	BIT(18)
@@ -1139,6 +1143,27 @@ aq2_eee_mask_from_link_options(uint32_t link_options)
 }
 
 static int
+aq2_fw_set_downshift(struct aq_hw *hw, uint32_t counter)
+{
+	uint32_t downshift_bits;
+	int err;
+
+	if (counter > AQ_DOWNSHIFT_MAX)
+		return (EINVAL);
+
+	downshift_bits =
+	    (counter << AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_RETRY_S) &
+	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_RETRY;
+
+	if (counter != 0)
+		downshift_bits |= AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_EN;
+
+	err = aq2_fw_link_options_update(hw,
+	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT, downshift_bits);
+	return (err);
+}
+
+static int
 aq2_fw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 {
 	uint32_t link_options = 0;
@@ -1210,6 +1235,7 @@ const struct aq_firmware_ops aq_fw_a2_ops = {
 	.get_phy_temp = aq2_fw_get_phy_temp,
 	.get_cable_len = NULL,
 	.get_cable_diag = NULL,
+	.set_downshift = aq2_fw_set_downshift,
 	.set_eee_rate = aq2_fw_set_eee_rate,
 	.get_eee_rate = aq2_fw_get_eee_rate,
 };

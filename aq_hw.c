@@ -825,6 +825,14 @@ aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4])
 }
 
 int
+aq_hw_set_downshift(struct aq_hw *hw, uint32_t counter)
+{
+	if (hw->fw_ops && hw->fw_ops->set_downshift)
+		return (hw->fw_ops->set_downshift(hw, counter));
+	return (ENOTSUP);
+}
+
+int
 aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 {
 	if (hw->fw_ops && hw->fw_ops->set_eee_rate)

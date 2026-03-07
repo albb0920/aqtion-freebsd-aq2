@@ -59,6 +59,8 @@ typedef enum aq_fw_link_fc
 #define aq_fw_speed_auto \
 	(aq_fw_10M | aq_fw_100M | aq_fw_1G | aq_fw_2G5 | aq_fw_5G | aq_fw_10G)
 
+#define AQ_DOWNSHIFT_MAX	15U
+
 #define AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_A0 0u
 #define AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER_B0 1u
 
@@ -76,6 +78,7 @@ struct aq_firmware_ops
 	int (*get_phy_temp)(struct aq_hw *hal, int *temp_c);
 	int (*get_cable_len)(struct aq_hw *hal, uint8_t *len);
 	int (*get_cable_diag)(struct aq_hw *hal, uint32_t lane_data[4]);
+	int (*set_downshift)(struct aq_hw *hal, uint32_t counter);
 	int (*set_eee_rate)(struct aq_hw *hal, uint32_t rate);
 	int (*get_eee_rate)(struct aq_hw *hal, uint32_t *rate,
 	    uint32_t *supported, uint32_t *lp_rate);
@@ -90,7 +93,6 @@ int aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags,
 int fw2x_set_wol(struct aq_hw *hw, uint32_t wol_flags,
     const uint8_t *mac);
 int fw2x_read_settings_addr(struct aq_hw *hw);
-int fw2x_set_downshift(struct aq_hw *hw, uint32_t counter);
 int fw2x_set_media_detect(struct aq_hw *hw, bool enable);
 int fw2x_set_loopback(struct aq_hw *hw, int mode);
 extern struct aq_firmware_ops aq_fw2x_ops;

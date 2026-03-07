@@ -71,12 +71,19 @@ You can also set a combined mask (magic|phy):
 sysctl dev.aq.0.wol_mask=3
 ```
 
-## FW2x controls
+## Downshift control
+
+This is available on AQ2 and FW2x devices:
+
+```
+sysctl dev.aq.0.downshift=3
+```
+
+## FW2x-only controls
 
 These are only available on FW2x devices:
 
 ```
-sysctl dev.aq.0.downshift=3
 sysctl dev.aq.0.media_detect=1
 sysctl dev.aq.0.loopback=1   # 0=off,1=int,2=ext
 ```
