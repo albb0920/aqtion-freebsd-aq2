@@ -479,7 +479,7 @@ fw2x_read_settings_addr(struct aq_hw *hw)
 	int err;
 
 	if (hw->mbox_addr == 0)
-		return (-ENOTSUP);
+		return (ENOTSUP);
 	offset = offsetof(struct fw2x_mbox_full, info.setting_address);
 	err = aq_hw_fw_downld_dwords(hw, hw->mbox_addr + offset, &addr, 1);
 	if (err != 0)
@@ -492,7 +492,7 @@ fw2x_read_settings_addr(struct aq_hw *hw)
 	if (addr == 0 || addr == 0xffffffffU || (addr & 0x3U) != 0 ||
 		len < sizeof(struct fw2x_settings)) {
 		hw->settings_addr = 0;
-		return (-ENOTSUP);
+		return (ENOTSUP);
 	}
 
 	hw->settings_addr = addr;
@@ -504,7 +504,7 @@ fw2x_write_settings_dwords(struct aq_hw *hw, uint32_t offset,
 	const uint32_t *p, uint32_t cnt)
 {
 	if (hw->settings_addr == 0)
-		return (-ENOTSUP);
+		return (ENOTSUP);
 	return (aq_hw_fw_upload_dwords(hw, hw->settings_addr + offset, p,
 	    cnt));
 }
@@ -517,7 +517,7 @@ fw2x_rpc_call(struct aq_hw *hw, const void *buf, uint32_t len)
 	int err = 0;
 
 	if (len > AQ_FW_RPC_MAX)
-		return (-EINVAL);
+		return (EINVAL);
 
 	if (buf && len != 0) {
 		memcpy(hw->rpc_buf, buf, len);
@@ -525,7 +525,7 @@ fw2x_rpc_call(struct aq_hw *hw, const void *buf, uint32_t len)
 	}
 
 	if (hw->rpc_addr == 0)
-		return (-ENOTSUP);
+		return (ENOTSUP);
 
 	dword_cnt = (len + sizeof(uint32_t) - 1U) / sizeof(uint32_t);
 	if (dword_cnt != 0) {
@@ -550,7 +550,7 @@ fw2x_set_downshift(struct aq_hw *hw, uint32_t counter)
 	int err;
 
 	if ((hw->fw_caps & FW2X_CAP_DOWNSHIFT) == 0)
-		return (-ENOTSUP);
+		return (ENOTSUP);
 	offset = offsetof(struct fw2x_settings, downshift_retry_count);
 	err = fw2x_write_settings_dwords(hw, offset, &counter, 1);
 	if (err != 0)
@@ -572,7 +572,7 @@ fw2x_set_media_detect(struct aq_hw *hw, bool enable)
 	uint32_t offset;
 
 	if ((hw->fw_caps & FW2X_CAP_MEDIA_DETECT) == 0)
-		return (-ENOTSUP);
+		return (ENOTSUP);
 	offset = offsetof(struct fw2x_settings, media_detect);
 	return (fw2x_write_settings_dwords(hw, offset, &val, 1));
 }
@@ -596,7 +596,7 @@ fw2x_set_loopback(struct aq_hw *hw, int mode)
 		mpi_opts &= ~FW2X_CTRL_INT_LOOPBACK;
 		break;
 	default:
-		return (-EINVAL);
+		return (EINVAL);
 	}
 	AQ_WRITE_REG(hw, FW2X_MPI_CONTROL2_ADDR, mpi_opts);
 	return (0);
@@ -622,8 +622,8 @@ fw2x_rpc_wait(struct aq_hw *hw, uint32_t *fw_len)
 
 		AQ_HW_WAIT_FOR(((fw.val = fw2x_rpc_state_get(hw)),
 			sw.tid == fw.tid), 1000U, 100000U);
-		if (err < 0)
-			return (-EIO);
+		if (err != EOK)
+			return (EIO);
 
 		if (fw.len == 0xFFFFU) {
 			err = fw2x_rpc_call(hw, NULL, sw.len);
@@ -633,7 +633,7 @@ fw2x_rpc_wait(struct aq_hw *hw, uint32_t *fw_len)
 	} while (sw.tid != fw.tid || fw.len == 0xFFFFU);
 
 	if (fw.len > AQ_FW_RPC_MAX)
-		return (-EINVAL);
+		return (EINVAL);
 	if (fw.len != 0) {
 		dword_cnt = (fw.len + sizeof(uint32_t) - 1U) / sizeof(uint32_t);
 		err = aq_hw_fw_downld_dwords(hw, hw->rpc_addr,
@@ -722,7 +722,7 @@ fw2x_set_mode(struct aq_hw* hw, enum aq_hw_fw_mpi_state_e mode,
 
 	default:
 		trace_error(dbg_init, "fw2x> unknown MPI state %d", mode);
-		return (-EINVAL);
+		return (EINVAL);
 	}
 
 	set_mpi_ctrl_(hw, mpi_ctrl);
@@ -774,7 +774,7 @@ fw2x_get_mode(struct aq_hw* hw, enum aq_hw_fw_mpi_state_e* mode,
 int
 fw2x_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
 {
-	int err = -EFAULT;
+	int err = EFAULT;
 	uint32_t mac_addr[2];
 
 	AQ_DBG_ENTER();
@@ -782,13 +782,13 @@ fw2x_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
 	uint32_t efuse_shadow_addr = AQ_READ_REG(hw, 0x364);
 	if (efuse_shadow_addr == 0) {
 		trace_error(dbg_init, "couldn't read eFUSE Shadow Address");
-		AQ_DBG_EXIT(-EFAULT);
-		return (-EFAULT);
+		AQ_DBG_EXIT(EFAULT);
+		return (EFAULT);
 	}
 
 	err = aq_hw_fw_downld_dwords(hw, efuse_shadow_addr + (40 * 4),
 		mac_addr, ARRAY_SIZE(mac_addr));
-	if (err < 0) {
+	if (err != EOK) {
 		mac_addr[0] = 0;
 		mac_addr[1] = 0;
 		AQ_DBG_EXIT(err);
@@ -881,14 +881,14 @@ fw2x_get_stats(struct aq_hw *hw, struct aq_stats_s *stats)
 
 	if ((hw->fw_caps & FW2X_CAP_STATISTICS) == 0) {
 		trace_warn(dbg_fw, "fw2x> statistics not supported by F/W");
-		return (-ENOTSUP);
+		return (ENOTSUP);
 	}
 
 	// Say to F/W to update the statistics
 	if (!toggle_mpi_ctrl_and_wait_(hw, FW2X_CAP_STATISTICS, 1, 25)) {
 		trace_error(dbg_fw, "fw2x> statistics update timeout");
-		AQ_DBG_EXIT(-ETIME);
-		return (-ETIME);
+		AQ_DBG_EXIT(ETIME);
+		return (ETIME);
 	}
 
 	err = aq_hw_fw_downld_dwords(hw,
@@ -942,7 +942,7 @@ fw2x_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 	int err = 0;
 
 	if (hw->rpc_addr == 0)
-		return (-ENOTSUP);
+		return (ENOTSUP);
 
 	mpi_ctrl2 = AQ_READ_REG(hw, FW2X_MPI_CONTROL2_ADDR);
 
@@ -951,8 +951,8 @@ fw2x_set_wol(struct aq_hw *hw, uint32_t wol_flags, const uint8_t *mac)
 			mpi_ctrl2 | FW2X_CTRL_LINK_DROP);
 		AQ_HW_WAIT_FOR((AQ_READ_REG(hw, FW2X_MPI_STATE2_ADDR) &
 			FW2X_CTRL_LINK_DROP) != 0, 1000, 100000);
-		if (err < 0)
-			return (-EIO);
+		if (err != EOK)
+			return (EIO);
 		mpi_ctrl2 &= ~FW2X_CTRL_LINK_DROP;
 		mpi_ctrl2 |= FW2X_CTRL_WAKE_ON_LINK;
 	} else {
@@ -987,12 +987,12 @@ fw2x_get_phy_temp(struct aq_hw *hw, int *temp_c)
 	int err;
 
 	if (temp_c == NULL)
-		return (-EINVAL);
+		return (EINVAL);
 
 	err = aq_hw_fw_downld_dwords(hw,
 		hw->mbox_addr + offsetof(fw2x_mailbox, phy_temperature),
 		&word, 1);
-	if (err < 0)
+	if (err != EOK)
 		return (err);
 
 	word = le32toh(word);
@@ -1007,12 +1007,12 @@ fw2x_get_cable_len(struct aq_hw *hw, uint8_t *len)
 	int err;
 
 	if (len == NULL)
-		return (-EINVAL);
+		return (EINVAL);
 
 	err = aq_hw_fw_downld_dwords(hw,
 		hw->mbox_addr + offsetof(fw2x_mailbox, phy_temperature),
 		&word, 1);
-	if (err < 0)
+	if (err != EOK)
 		return (err);
 
 	word = le32toh(word);
@@ -1026,12 +1026,12 @@ fw2x_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4])
 	int err;
 
 	if (lane_data == NULL)
-		return (-EINVAL);
+		return (EINVAL);
 
 	err = aq_hw_fw_downld_dwords(hw,
 		hw->mbox_addr + offsetof(fw2x_mailbox, diag_data),
 		lane_data, 4);
-	if (err < 0)
+	if (err != EOK)
 		return (err);
 
 	lane_data[0] = le32toh(lane_data[0]);

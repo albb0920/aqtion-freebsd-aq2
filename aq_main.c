@@ -504,7 +504,7 @@ aq_if_attach_pre(if_ctx_t ctx)
 
 	/* Look up ops and caps. */
 	rc = aq_hw_mpi_create(hw);
-	if (rc < 0) {
+	if (rc != 0) {
 		AQ_DBG_ERROR(" %s: aq_hw_mpi_create fail err=%d", __func__, rc);
 		goto fail;
 	}
@@ -512,14 +512,18 @@ aq_if_attach_pre(if_ctx_t ctx)
 	if (hw->fast_start_enabled) {
 		if (hw->fw_ops && hw->fw_ops->reset)
 			hw->fw_ops->reset(hw);
-	} else
-		aq_hw_reset(&softc->hw);
+	} else {
+		rc = aq_hw_reset(&softc->hw);
+		if (rc != 0)
+			goto fail;
+	}
 	aq_hw_capabilities(softc);
 
-	if (aq_hw_get_mac_permanent(hw, hw->mac_addr) < 0) {
+	rc = aq_hw_get_mac_permanent(hw, hw->mac_addr);
+	if (rc != 0) {
 		AQ_DBG_ERROR("Unable to get mac addr from hw");
 		goto fail;
-	};
+	}
 	mtu_jumbo = aq_hw_mtu_jumbo(hw);
 	aq_sctx_init.isc_tx_maxsegsize = mtu_jumbo;
 #if __FreeBSD__ >= 12
@@ -590,7 +594,7 @@ fail:
 		    softc->mmio_rid, softc->mmio_res);
 
 	AQ_DBG_EXIT(rc);
-	return (ENXIO);
+	return (rc);
 }
 
 
@@ -1574,7 +1578,7 @@ aq_sysctl_phy_temp(SYSCTL_HANDLER_ARGS)
 
 	err = aq_hw_get_phy_temp(&softc->hw, &temp);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	return (sysctl_handle_int(oidp, &temp, 0, req));
 }
@@ -1589,7 +1593,7 @@ aq_sysctl_cable_len(SYSCTL_HANDLER_ARGS)
 
 	err = aq_hw_get_cable_len(&softc->hw, &len);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	val = len;
 	return (sysctl_handle_int(oidp, &val, 0, req));
@@ -1605,7 +1609,7 @@ aq_sysctl_cable_diag(SYSCTL_HANDLER_ARGS)
 
 	err = aq_hw_get_cable_diag(&softc->hw, lane_data);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	snprintf(buf, sizeof(buf), "0x%08x 0x%08x 0x%08x 0x%08x",
 	    lane_data[0], lane_data[1], lane_data[2], lane_data[3]);
@@ -1881,14 +1885,14 @@ aq_sysctl_l2_filter(SYSCTL_HANDLER_ARGS)
 		cfg.queue = -1;
 		err = aq_hw_filter_l2_clear(&softc->hw, &cfg);
 		if (err != 0)
-			return (err < 0 ? -err : err);
+			return (err);
 		memset(&cfg, 0, sizeof(cfg));
 		cfg.location = (uint8_t)location;
 		cfg.queue = -1;
 	} else {
 		err = aq_hw_filter_l2_set(&softc->hw, &cfg);
 		if (err != 0)
-			return (err < 0 ? -err : err);
+			return (err);
 	}
 
 	softc->rx_filters.etype_filters[location] = cfg;
@@ -2073,7 +2077,7 @@ aq_sysctl_downshift(SYSCTL_HANDLER_ARGS)
 		return (ENOTSUP);
 	err = fw2x_set_downshift(&softc->hw, (uint32_t)val);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	softc->downshift = (uint32_t)val;
 	return (0);
@@ -2097,7 +2101,7 @@ aq_sysctl_media_detect(SYSCTL_HANDLER_ARGS)
 		return (ENOTSUP);
 	err = fw2x_set_media_detect(&softc->hw, (val != 0));
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	softc->media_detect = (val != 0);
 	return (0);
@@ -2121,7 +2125,7 @@ aq_sysctl_loopback(SYSCTL_HANDLER_ARGS)
 		return (ENOTSUP);
 	err = fw2x_set_loopback(&softc->hw, val);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	softc->loopback_mode = val;
 	return (0);
@@ -2154,7 +2158,7 @@ aq_sysctl_apply_itr(struct aq_dev *softc, int itr_mode, uint16_t itr_tx,
 	hw->itr_rx = saved_rx;
 	(void)aq_hw_interrupt_moderation_set(hw);
 
-	return (err < 0 ? -err : err);
+	return (err);
 }
 
 static int
@@ -2371,7 +2375,7 @@ aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS)
 	if (!enable) {
 		err = aq_hw_filter_l3l4_clear(&softc->hw, &cfg);
 		if (err != 0)
-			return (err < 0 ? -err : err);
+			return (err);
 		memset(&cfg, 0, sizeof(cfg));
 		cfg.location = (uint8_t)location;
 		cfg.p_src = 0;
@@ -2417,7 +2421,7 @@ aq_sysctl_l3l4_filter(SYSCTL_HANDLER_ARGS)
 	cfg.cmd = cmd;
 	err = aq_hw_filter_l3l4_set(&softc->hw, &cfg);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	softc->rx_filters.l3l4_filters[location] = cfg;
 	return (0);
@@ -2435,7 +2439,7 @@ aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS)
 
 	err = aq_hw_get_eee_rate(&softc->hw, &rate, &supported, &lp);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	val = (int)rate;
 	err = sysctl_handle_int(oidp, &val, 0, req);
@@ -2447,7 +2451,7 @@ aq_sysctl_eee_rate(SYSCTL_HANDLER_ARGS)
 
 	err = aq_hw_set_eee_rate(&softc->hw, (uint32_t)val);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	softc->hw.eee_rate = (uint32_t)val;
 	return (0);
@@ -2465,7 +2469,7 @@ aq_sysctl_eee_supported(SYSCTL_HANDLER_ARGS)
 
 	err = aq_hw_get_eee_rate(&softc->hw, &rate, &supported, &lp);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	val = (int)supported;
 	return (sysctl_handle_int(oidp, &val, 0, req));
@@ -2483,7 +2487,7 @@ aq_sysctl_eee_lp_rate(SYSCTL_HANDLER_ARGS)
 
 	err = aq_hw_get_eee_rate(&softc->hw, &rate, &supported, &lp);
 	if (err != 0)
-		return (err < 0 ? -err : err);
+		return (err);
 
 	val = (int)lp;
 	return (sysctl_handle_int(oidp, &val, 0, req));

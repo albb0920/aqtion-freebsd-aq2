@@ -589,7 +589,7 @@ aq2_interface_buffer_read(struct aq_hw *hw, uint32_t reg0, uint32_t *data0,
 	}
 
 	if (timo == 0)
-		return (-ETIMEDOUT);
+		return (ETIMEDOUT);
 	return (0);
 }
 
@@ -609,7 +609,7 @@ aq2_fw_wait_shared_ack(struct aq_hw *hw)
 		usec_delay(100);
 	}
 
-	return (-ETIMEDOUT);
+	return (ETIMEDOUT);
 }
 
 int
@@ -633,7 +633,7 @@ aq2_fw_reboot(struct aq_hw *hw)
 		usec_delay(10);
 	}
 	if (timo == 0)
-		return (-ETIMEDOUT);
+		return (ETIMEDOUT);
 
 	for (timo = 2000000; timo > 0; --timo) {
 		v = AQ_READ_REG(hw, AQ2_MIF_BOOT_REG);
@@ -646,15 +646,15 @@ aq2_fw_reboot(struct aq_hw *hw)
 		usec_delay(10);
 	}
 	if (timo == 0)
-		return (-ETIMEDOUT);
+		return (ETIMEDOUT);
 
 	v = AQ_READ_REG(hw, AQ2_MIF_BOOT_REG);
 	if (v & AQ2_MIF_BOOT_FW_INIT_FAILED)
-		return (-ETIMEDOUT);
+		return (ETIMEDOUT);
 
 	v = AQ_READ_REG(hw, AQ2_MCP_HOST_REQ_INT_REG);
 	if (v & AQ2_MCP_HOST_REQ_INT_READY)
-		return (-ENXIO);
+		return (ENXIO);
 
 	err = aq2_interface_buffer_read(hw,
 	    AQ2_FW_INTERFACE_OUT_VERSION_BUNDLE_REG, &v, sizeof(v));
@@ -739,7 +739,7 @@ aq2_fw_get_mac_addr(struct aq_hw *hw, uint8_t *mac)
 		return (err);
 
 	if (mac_addr[0] == 0 && mac_addr[1] == 0)
-		return (-ENXIO);
+		return (ENXIO);
 
 	mac_addr[0] = htole32(mac_addr[0]);
 	mac_addr[1] = htole32(mac_addr[1]);
@@ -998,7 +998,7 @@ aq2_fw_get_phy_temp(struct aq_hw *hw, int *temp_c)
 	int err;
 
 	if (temp_c == NULL)
-		return (-EINVAL);
+		return (EINVAL);
 
 	reg = AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_REG +
 	    (uint32_t)offsetof(struct aq2_fw_interface_out_prefix,

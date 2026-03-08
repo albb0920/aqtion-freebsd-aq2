@@ -198,7 +198,7 @@ fw1x_reset(struct aq_hw* hal)
 	}
 
 	trace_error(dbg_init, "F/W 1.x reset finalize timeout");
-	return (-EBUSY);
+	return (EBUSY);
 }
 
 int
@@ -259,7 +259,7 @@ fw1x_get_mode(struct aq_hw* hw, enum aq_hw_fw_mpi_state_e* mode,
 int
 fw1x_get_mac_addr(struct aq_hw* hw, uint8_t* mac)
 {
-	int err = -EFAULT;
+	int err = EFAULT;
 	uint32_t mac_addr[2];
 
 	AQ_DBG_ENTER();
@@ -267,13 +267,13 @@ fw1x_get_mac_addr(struct aq_hw* hw, uint8_t* mac)
 	uint32_t efuse_shadow_addr = AQ_READ_REG(hw, 0x374);
 	if (efuse_shadow_addr == 0) {
 		trace_error(dbg_init, "couldn't read eFUSE Shadow Address");
-		AQ_DBG_EXIT(-EFAULT);
-		return (-EFAULT);
+		AQ_DBG_EXIT(EFAULT);
+		return (EFAULT);
 	}
 
 	err = aq_hw_fw_downld_dwords(hw, efuse_shadow_addr + (40 * 4),
 	    mac_addr, ARRAY_SIZE(mac_addr));
-	if (err < 0) {
+	if (err != EOK) {
 		mac_addr[0] = 0;
 		mac_addr[1] = 0;
 		AQ_DBG_EXIT(err);
@@ -301,7 +301,7 @@ fw1x_get_stats(struct aq_hw* hw, struct aq_stats_s* stats)
 	err = aq_hw_fw_downld_dwords(hw, hw->mbox_addr,
 	    (uint32_t*)(void*)&hw->mbox, sizeof hw->mbox / sizeof(uint32_t));
 
-	if (err >= 0) {
+	if (err == EOK) {
 		stats->ucast_pkts_rcvd = hw->mbox.stats.uprc;
 		stats->mcast_pkts_rcvd = hw->mbox.stats.mprc;
 		stats->bcast_pkts_rcvd = hw->mbox.stats.bprc;

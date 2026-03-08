@@ -57,7 +57,7 @@ do { \
 		usec_delay(_US_); \
 	} \
 	if (!i) { \
-		err = -1; \
+		err = ETIME; \
 	} \
 } while (0)
 
