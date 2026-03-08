@@ -88,7 +88,7 @@ const uint32_t SCRATCHPAD_FW_LOADER_STATUS = (0x40 / sizeof(uint32_t));
 
 extern struct aq_firmware_ops aq_fw1x_ops;
 extern struct aq_firmware_ops aq_fw2x_ops;
-extern const struct aq_firmware_ops aq_fw_a2_ops;
+extern const struct aq_firmware_ops aq_fw_aq2_ops;
 
 
 int mac_soft_reset_(struct aq_hw* hw, aq_fw_bootloader_mode* mode);
@@ -176,7 +176,7 @@ int
 aq_fw_ops_init(struct aq_hw* hw)
 {
 	if (IS_CHIP_FEATURE(hw, ANTIGUA)) {
-	hw->fw_ops = &aq_fw_a2_ops;
+	hw->fw_ops = &aq_fw_aq2_ops;
 	return (EOK);
 	}
 

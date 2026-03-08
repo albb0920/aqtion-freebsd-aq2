@@ -51,7 +51,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @file aq_fw_a2.c
+ * @file aq_fw_aq2.c
  * Atlantic2 firmware interface helpers.
  */
 
@@ -76,7 +76,7 @@ __FBSDID("$FreeBSD$");
 #include "aq_hw.h"
 #include "aq_hw_llh.h"
 
-extern const struct aq_firmware_ops aq_fw_a2_ops;
+extern const struct aq_firmware_ops aq_fw_aq2_ops;
 
 #define AQ2_MIF_HOST_FINISHED_STATUS_WRITE_REG	0x0e00u
 #define AQ2_MIF_HOST_FINISHED_STATUS_READ_REG	0x0e04u
@@ -683,7 +683,7 @@ aq2_fw_reboot(struct aq_hw *hw)
 	int timo;
 	int err;
 
-	hw->fw_ops = &aq_fw_a2_ops;
+	hw->fw_ops = &aq_fw_aq2_ops;
 	hw->chip_features |= AQ_HW_CHIP_ANTIGUA;
 
 	AQ_WRITE_REG(hw, AQ2_MCP_HOST_REQ_INT_CLR_REG, 1);
@@ -1225,7 +1225,7 @@ aq2_fw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
 	return (0);
 }
 
-const struct aq_firmware_ops aq_fw_a2_ops = {
+const struct aq_firmware_ops aq_fw_aq2_ops = {
 	.reset = aq2_fw_reset,
 	.set_mode = aq2_fw_set_mode,
 	.get_mode = aq2_fw_get_mode,
