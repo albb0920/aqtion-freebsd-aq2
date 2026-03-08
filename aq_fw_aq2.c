@@ -71,121 +71,15 @@ __FBSDID("$FreeBSD$");
 #include <net/iflib.h>
 
 #include "aq_common.h"
+#include "aq_dbg.h"
 #include "aq_device.h"
 #include "aq_fw.h"
+#include "aq_hostboot.h"
 #include "aq_hw.h"
+#include "aq_hw_aq2.h"
 #include "aq_hw_llh.h"
 
 extern const struct aq_firmware_ops aq_fw_aq2_ops;
-
-#define AQ2_MIF_HOST_FINISHED_STATUS_WRITE_REG	0x0e00u
-#define AQ2_MIF_HOST_FINISHED_STATUS_READ_REG	0x0e04u
-#define AQ2_MIF_HOST_FINISHED_STATUS_ACK	BIT(0)
-
-#define AQ2_MCP_HOST_REQ_INT_REG		0x0f00u
-#define AQ2_MCP_HOST_REQ_INT_READY		BIT(0)
-#define AQ2_MCP_HOST_REQ_INT_CLR_REG		0x0f08u
-
-#define AQ2_MIF_BOOT_REG			0x3040u
-#define AQ2_MIF_BOOT_BOOT_STARTED		BIT(24)
-#define AQ2_MIF_BOOT_FW_INIT_FAILED		BIT(29)
-#define AQ2_MIF_BOOT_FW_INIT_COMP_SUCCESS	BIT(31)
-
-#define AQ2_FW_INTERFACE_IN_MTU_REG		0x12000u
-#define AQ2_FW_INTERFACE_IN_MAC_ADDRESS_REG	0x12008u
-
-#define AQ2_FW_INTERFACE_IN_LINK_CONTROL_REG	0x12010u
-#define AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE	0x0000000fu
-#define AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_ACTIVE		1u
-#define AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_SLEEP_PROXY	2u
-#define AQ2_FW_INTERFACE_IN_LINK_CONTROL_MODE_SHUTDOWN		4u
-
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_REG		0x12018u
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_TX	BIT(25)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_PAUSE_RX	BIT(24)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_EN	BIT(27)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT	0xf8000000u
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_RETRY	0xf0000000u
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_DOWNSHIFT_RETRY_S	28
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G	BIT(20)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G	BIT(19)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5	BIT(18)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G	BIT(17)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M	BIT(16)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE		\
-	(AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_10G |	\
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_5G |	\
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_2G5 |	\
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_1G |	\
-	    AQ2_FW_INTERFACE_IN_LINK_OPTIONS_EEE_100M)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10G	BIT(15)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N5G	BIT(14)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_5G	BIT(13)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_N2G5	BIT(12)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_2G5	BIT(11)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_1G	BIT(10)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_100M	BIT(9)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10M	BIT(8)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_1G_HD	BIT(7)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_100M_HD	BIT(6)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_RATE_10M_HD	BIT(5)
-#define  AQ2_FW_INTERFACE_IN_LINK_OPTIONS_LINK_UP	BIT(0)
-
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_REG \
-	0x12a58u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_QUEUE_OR_TC \
-	0x00800000u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_RX_QUEUE_TC_INDEX \
-	0x007c0000u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_MCAST_ACCEPT \
-	0x00010000u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_QUEUE_OR_TC \
-	0x00008000u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_RX_QUEUE_TC_INDEX \
-	0x00007c00u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_BCAST_ACCEPT \
-	0x00000100u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_PROMISC_QUEUE_OR_TC \
-	0x00000080u
-#define AQ2_FW_INTERFACE_IN_REQUEST_POLICY_PROMISC_RX_QUEUE_TX_INDEX \
-	0x0000007cu
-
-#define AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_REG	0x13000u
-#define AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_B	0xffff0000u
-#define AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_B_S 16
-#define AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_A	0x0000ffffu
-#define AQ2_FW_INTERFACE_OUT_TRANSACTION_ID_A_S	0
-
-#define AQ2_FW_INTERFACE_OUT_VERSION_BUNDLE_REG	0x13004u
-#define AQ2_FW_INTERFACE_OUT_VERSION_IFACE_REG	0x13010u
-
-#define AQ2_FW_INTERFACE_OUT_VERSION_BUILD	0xffff0000u
-#define AQ2_FW_INTERFACE_OUT_VERSION_BUILD_S	16
-#define AQ2_FW_INTERFACE_OUT_VERSION_MINOR	0x0000ff00u
-#define AQ2_FW_INTERFACE_OUT_VERSION_MINOR_S	8
-#define AQ2_FW_INTERFACE_OUT_VERSION_MAJOR	0x000000ffu
-#define AQ2_FW_INTERFACE_OUT_VERSION_MAJOR_S	0
-
-#define AQ2_FW_INTERFACE_OUT_VERSION_IFACE_VER	0x0000000fu
-
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_REG	0x13014u
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_PAUSE_RX	BIT(9)
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_PAUSE_TX	BIT(8)
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE		0x000000f0u
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE_S	4
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE_10G	6
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE_5G	5
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE_2G5	4
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE_1G	3
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE_100M	2
-#define AQ2_FW_INTERFACE_OUT_LINK_STATUS_RATE_10M	1
-
-#define AQ2_FW_INTERFACE_OUT_FILTER_CAPS_REG	0x13774u
-#define AQ2_FW_INTERFACE_OUT_FILTER_CAPS3_RESOLVER_BASE_INDEX 0x00ff0000u
-#define AQ2_FW_INTERFACE_OUT_FILTER_CAPS3_RESOLVER_BASE_INDEX_SHIFT 16
-
-#define AQ2_FW_INTERFACE_OUT_STATS_REG		0x13700u
-#define AQ2_FW_INTERFACE_IN_SLEEP_PROXY_REG	0x12028u
 
 struct aq2_wake_on_lan {
 	uint8_t wake_on_magic_packet:1;
@@ -675,11 +569,37 @@ aq2_fw_link_options_update(struct aq_hw *hw, uint32_t clear_mask,
 	return (err);
 }
 
+void
+aq2_log_boot_fail(uint32_t status, const char *message)
+{
+	char fail[48];
+
+	fail[0] = '\0';
+
+	if ((status & AQ2_MIF_BOOT_CRASH_INIT) != 0)
+		strlcat(fail, "CRASH_INIT", sizeof(fail));
+	if ((status & AQ2_MIF_BOOT_BOOT_CODE_FAILED) != 0) {
+		if (fail[0] != '\0')
+			strlcat(fail, "|", sizeof(fail));
+		strlcat(fail, "BOOT_CODE_FAILED", sizeof(fail));
+	}
+	if ((status & AQ2_MIF_BOOT_FW_INIT_FAILED) != 0) {
+		if (fail[0] != '\0')
+			strlcat(fail, "|", sizeof(fail));
+		strlcat(fail, "FW_INIT_FAILED", sizeof(fail));
+	}
+	if (fail[0] == '\0')
+		strlcpy(fail, "UNKNOWN", sizeof(fail));
+
+	aq_log_error("%s: %s (0x%x)", message, fail, status);
+}
+
 int
 aq2_fw_reboot(struct aq_hw *hw)
 {
-	uint32_t v;
 	uint32_t filter_caps[3];
+	uint32_t request;
+	uint32_t v;
 	int timo;
 	int err;
 
@@ -687,7 +607,11 @@ aq2_fw_reboot(struct aq_hw *hw)
 	hw->chip_features |= AQ_HW_CHIP_ANTIGUA;
 
 	AQ_WRITE_REG(hw, AQ2_MCP_HOST_REQ_INT_CLR_REG, 1);
-	AQ_WRITE_REG(hw, AQ2_MIF_BOOT_REG, 1);
+
+	request = AQ2_MIF_BOOT_REQ_REBOOT;
+	if (aq_hostboot_force(hw))
+		request |= AQ2_MIF_BOOT_REQ_HOST_BOOT;
+	AQ_WRITE_REG(hw, AQ2_MIF_BOOT_REG, request);
 
 	for (timo = 200000; timo > 0; --timo) {
 		v = AQ_READ_REG(hw, AQ2_MIF_BOOT_REG);
@@ -695,29 +619,40 @@ aq2_fw_reboot(struct aq_hw *hw)
 			break;
 		usec_delay(10);
 	}
-	if (timo == 0)
+	if (timo == 0) {
+		aq_log_error("AQ2 host boot start timed out");
 		return (ETIMEDOUT);
+	}
 
 	for (timo = 2000000; timo > 0; --timo) {
 		v = AQ_READ_REG(hw, AQ2_MIF_BOOT_REG);
-		if ((v & AQ2_MIF_BOOT_FW_INIT_FAILED) ||
-		    (v & AQ2_MIF_BOOT_FW_INIT_COMP_SUCCESS))
+		if ((v & AQ2_MIF_BOOT_FW_DONE_MASK) != 0)
 			break;
 		v = AQ_READ_REG(hw, AQ2_MCP_HOST_REQ_INT_REG);
 		if (v & AQ2_MCP_HOST_REQ_INT_READY)
 			break;
 		usec_delay(10);
 	}
-	if (timo == 0)
+	if (timo == 0) {
+		aq_log_error("AQ2 host boot completion timed out");
 		return (ETIMEDOUT);
+	}
 
 	v = AQ_READ_REG(hw, AQ2_MIF_BOOT_REG);
-	if (v & AQ2_MIF_BOOT_FW_INIT_FAILED)
-		return (ETIMEDOUT);
+	if (v & AQ2_MIF_BOOT_FW_FAIL_MASK) {
+		aq2_log_boot_fail(v, "AQ2 firmware reported boot failure");
+		return (EIO);
+	}
 
 	v = AQ_READ_REG(hw, AQ2_MCP_HOST_REQ_INT_REG);
-	if (v & AQ2_MCP_HOST_REQ_INT_READY)
-		return (ENXIO);
+	if (v & AQ2_MCP_HOST_REQ_INT_READY) {
+		if (hw->hostboot_fw == NULL)
+			return (AQ_HOSTBOOT_IMAGE_REQUIRED);
+
+		err = aq_hostboot_aq2(hw);
+		if (err != 0)
+			return (err);
+	}
 
 	err = aq2_interface_buffer_read(hw,
 	    AQ2_FW_INTERFACE_OUT_VERSION_BUNDLE_REG, &v, sizeof(v));

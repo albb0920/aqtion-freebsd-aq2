@@ -40,6 +40,8 @@
 #include "aq_hw.h"
 #include "aq_stats.h"
 
+struct firmware;
+
 enum aq_media_type {
 	AQ_MEDIA_TYPE_UNKNOWN = 0,
 	AQ_MEDIA_TYPE_FIBRE,
@@ -81,6 +83,15 @@ struct aq_rx_filters {
 struct aq_vlan_tag {
 	SLIST_ENTRY(aq_vlan_tag) next;
 	uint16_t	tag;
+};
+
+#define AQ_HOSTBOOT_NAME_LEN	64
+
+struct aq_hostboot_config {
+	bool		force;
+	bool		provisioning_override;
+	uint32_t	provisioning_selector;
+	char		fw_image[AQ_HOSTBOOT_NAME_LEN];
 };
 
 struct aq_dev {
@@ -125,6 +136,9 @@ struct aq_dev {
 	struct aq_stats_s	accum_stats;
 
 	struct aq_rx_filters	rx_filters;
+
+	struct aq_hostboot_config	hostboot_config;
+	char			hostboot_fw_image[AQ_HOSTBOOT_NAME_LEN];
 
 	bitstr_t		*vlan_tags;
 	int			mcnt;
