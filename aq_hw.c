@@ -414,7 +414,7 @@ aq2_filter_art_set(struct aq_hw *hw, uint32_t idx, uint32_t tag,
 	}
 
 	if (timo == 0)
-	    return (-ETIMEDOUT);
+	    return (ETIMEDOUT);
 
 	idx += hw->art_base_index;
 	AQ_WRITE_REG(hw, AQ2_RPF_ACT_ART_REQ_TAG_REG(idx), tag);
@@ -456,13 +456,13 @@ aq_hw_fw_downld_dwords(struct aq_hw *hw, uint32_t a, uint32_t *p, uint32_t cnt)
 	AQ_HW_WAIT_FOR(reg_glb_cpu_sem_get(hw, AQ_HW_FW_SM_RAM) == 1U, 1U,
 	     10000U);
 
-	if (err < 0) {
+	if (err != EOK) {
 		bool is_locked;
 
 		reg_glb_cpu_sem_set(hw, 1U, AQ_HW_FW_SM_RAM);
 		is_locked = reg_glb_cpu_sem_get(hw, AQ_HW_FW_SM_RAM);
 		if (!is_locked) {
-			err = -ETIME;
+			err = ETIME;
 			goto err_exit;
 		}
 	}
@@ -499,13 +499,13 @@ aq_hw_fw_upload_dwords(struct aq_hw *hw, uint32_t a, const uint32_t *p,
 	                   AQ_HW_FW_SM_RAM) == 1U,
 	                   1U, 10000U);
 
-	if (err < 0) {
+	if (err != EOK) {
 		bool is_locked;
 
 		reg_glb_cpu_sem_set(hw, 1U, AQ_HW_FW_SM_RAM);
 		is_locked = reg_glb_cpu_sem_get(hw, AQ_HW_FW_SM_RAM);
 		if (!is_locked) {
-			err = -ETIME;
+			err = ETIME;
 			goto err_exit;
 		}
 	}
@@ -571,9 +571,9 @@ aq_hw_init_ucp(struct aq_hw *hw)
 
 	aq_hw_chip_features_init(hw, &hw->chip_features);
 	err = aq_fw_ops_init(hw);
-	if (err < 0) {
+	if (err != EOK) {
 		aq_log_error("could not initialize F/W ops, err %d", err);
-		return (-1);
+		return (err);
 	}
 
 	if (hw->fw_version.major_version == 1) {
@@ -618,7 +618,7 @@ aq_hw_mpi_create(struct aq_hw *hw)
 
 	AQ_DBG_ENTER();
 	err = aq_hw_init_ucp(hw);
-	if (err < 0)
+	if (err != EOK)
 		goto err_exit;
 
 err_exit:
@@ -637,7 +637,7 @@ aq_hw_mpi_read_stats(struct aq_hw *hw, struct aq_stats_s *stats)
 	if (hw->fw_ops && hw->fw_ops->get_stats) {
 		err = hw->fw_ops->get_stats(hw, stats);
 	} else {
-		err = -ENOTSUP;
+		err = ENOTSUP;
 		aq_log_error("get_stats() not supported by F/W");
 	}
 
@@ -653,7 +653,7 @@ aq_hw_mpi_read_stats(struct aq_hw *hw, struct aq_stats_s *stats)
 static int
 aq_hw_mpi_set(struct aq_hw *hw, enum aq_hw_fw_mpi_state_e state, uint32_t speed)
 {
-	int err = -ENOTSUP;
+	int err = ENOTSUP;
 	AQ_DBG_ENTERA("speed %d", speed);
 
 	if (hw->fw_ops && hw->fw_ops->set_mode) {
@@ -687,11 +687,11 @@ aq_hw_get_link_state(struct aq_hw *hw, uint32_t *link_speed, struct aq_hw_fc_inf
 		err = hw->fw_ops->get_mode(hw, &mode, &speed, &fc);
 	} else {
 		aq_log_error("get_mode() not supported by F/W");
-		AQ_DBG_EXIT(-ENOTSUP);
-		return (-ENOTSUP);
+		AQ_DBG_EXIT(ENOTSUP);
+		return (ENOTSUP);
 	}
 
-	if (err < 0) {
+	if (err != EOK) {
 		aq_log_error("get_mode() failed, err %d", err);
 		AQ_DBG_EXIT(err);
 		return (err);
@@ -733,7 +733,7 @@ aq_hw_get_link_state(struct aq_hw *hw, uint32_t *link_speed, struct aq_hw_fc_inf
 int
 aq_hw_get_mac_permanent(struct aq_hw *hw,  uint8_t *mac)
 {
-	int err = -ENOTSUP;
+	int err = ENOTSUP;
 	AQ_DBG_ENTER();
 
 	if (hw->fw_ops && hw->fw_ops->get_mac_addr)
@@ -805,7 +805,7 @@ aq_hw_get_phy_temp(struct aq_hw *hw, int *temp_c)
 {
 	if (hw->fw_ops && hw->fw_ops->get_phy_temp)
 		return (hw->fw_ops->get_phy_temp(hw, temp_c));
-	return (-ENOTSUP);
+	return (ENOTSUP);
 }
 
 int
@@ -813,7 +813,7 @@ aq_hw_get_cable_len(struct aq_hw *hw, uint8_t *len)
 {
 	if (hw->fw_ops && hw->fw_ops->get_cable_len)
 		return (hw->fw_ops->get_cable_len(hw, len));
-	return (-ENOTSUP);
+	return (ENOTSUP);
 }
 
 int
@@ -821,7 +821,7 @@ aq_hw_get_cable_diag(struct aq_hw *hw, uint32_t lane_data[4])
 {
 	if (hw->fw_ops && hw->fw_ops->get_cable_diag)
 		return (hw->fw_ops->get_cable_diag(hw, lane_data));
-	return (-ENOTSUP);
+	return (ENOTSUP);
 }
 
 int
@@ -829,7 +829,7 @@ aq_hw_set_eee_rate(struct aq_hw *hw, uint32_t rate)
 {
 	if (hw->fw_ops && hw->fw_ops->set_eee_rate)
 		return (hw->fw_ops->set_eee_rate(hw, rate));
-	return (-ENOTSUP);
+	return (ENOTSUP);
 }
 
 int
@@ -838,7 +838,7 @@ aq_hw_get_eee_rate(struct aq_hw *hw, uint32_t *rate, uint32_t *supported,
 {
 	if (hw->fw_ops && hw->fw_ops->get_eee_rate)
 		return (hw->fw_ops->get_eee_rate(hw, rate, supported, lp_rate));
-	return (-ENOTSUP);
+	return (ENOTSUP);
 }
 
 /* HW NIC functions */
@@ -852,11 +852,11 @@ aq_hw_reset(struct aq_hw *hw)
 
 	if (AQ_HW_IS_AQ2(hw)) {
 	    err = aq2_fw_reboot(hw);
-	    if (err < 0)
+	    if (err != EOK)
 	        goto err_exit;
 	} else {
 	    err = aq_fw_reset(hw);
-	    if (err < 0)
+	    if (err != EOK)
 	        goto err_exit;
 	}
 	itr_irq_reg_res_dis_set(hw, 0);
@@ -864,7 +864,7 @@ aq_hw_reset(struct aq_hw *hw)
 
 	/* check 10 times by 1ms */
 	AQ_HW_WAIT_FOR(itr_res_irq_get(hw) == 0, 1000, 10);
-	if (err < 0) {
+	if (err != EOK) {
 		printf("atlantic: IRQ reset failed: %d", err);
 		goto err_exit;
 	}
@@ -965,18 +965,18 @@ aq_hw_offload_set(struct aq_hw *hw, bool rx_ip_csum_enable,
 	/* TX checksums offloads*/
 	tpo_ipv4header_crc_offload_en_set(hw, 1);
 	tpo_tcp_udp_crc_offload_en_set(hw, 1);
-	if (err < 0)
+	if (err != EOK)
 		goto err_exit;
 
 	/* RX checksums offloads*/
 	rpo_ipv4header_crc_offload_en_set(hw, rx_ip_csum_enable);
 	rpo_tcp_udp_crc_offload_en_set(hw, rx_l4_csum_enable);
-	if (err < 0)
+	if (err != EOK)
 		goto err_exit;
 
 	/* LSO offloads*/
 	tdm_large_send_offload_en_set(hw, 0xFFFFFFFFU);
-	if (err < 0)
+	if (err != EOK)
 		goto err_exit;
 
 /* LRO offloads */
@@ -1211,7 +1211,7 @@ aq_hw_init(struct aq_hw *hw, uint8_t adm_irq, bool msix, int capenable)
 	}
 
 	err = aq_hw_err_from_flags(hw);
-	if (err < 0)
+	if (err != EOK)
 	    goto err_exit;
 
 	/* Interrupts */
@@ -1404,7 +1404,7 @@ int
 aq_hw_filter_l2_set(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 {
 	if (AQ_HW_IS_AQ2(hw))
-		return (-ENOTSUP);
+		return (ENOTSUP);
 
 	aq_hw_l2_filter_write(hw, data, true);
 	return (aq_hw_err_from_flags(hw));
@@ -1414,7 +1414,7 @@ int
 aq_hw_filter_l2_clear(struct aq_hw *hw, struct aq_rx_filter_l2 *data)
 {
 	if (AQ_HW_IS_AQ2(hw))
-		return (-ENOTSUP);
+		return (ENOTSUP);
 
 	aq_hw_l2_filter_write(hw, data, false);
 	return (aq_hw_err_from_flags(hw));
@@ -1488,7 +1488,7 @@ int
 aq_hw_filter_l3l4_clear(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
 {
 	if (AQ_HW_IS_AQ2(hw))
-		return (-ENOTSUP);
+		return (ENOTSUP);
 
 	aq_hw_l3l4_rule_clear(hw, data);
 	return (aq_hw_err_from_flags(hw));
@@ -1500,7 +1500,7 @@ aq_hw_filter_l3l4_set(struct aq_hw *hw, struct aq_rx_filter_l3l4 *data)
 	int err;
 
 	if (AQ_HW_IS_AQ2(hw))
-		return (-ENOTSUP);
+		return (ENOTSUP);
 
 	aq_hw_l3l4_rule_clear(hw, data);
 	err = aq_hw_err_from_flags(hw);
@@ -1563,7 +1563,7 @@ aq_hw_rss_hash_set(struct aq_hw_s *self,
 		rpf_rss_key_wr_en_set(self, 1U);
 		AQ_HW_WAIT_FOR(rpf_rss_key_wr_en_get(self) == 0,
 			       1000U, 10U);
-		if (err < 0)
+		if (err != EOK)
 			goto err_exit;
 	}
 
@@ -1676,7 +1676,7 @@ aq_hw_rss_set(struct aq_hw_s *self,
 		rpf_rss_redir_wr_en_set(self, 1U);
 		AQ_HW_WAIT_FOR(rpf_rss_redir_wr_en_get(self) == 0,
 			       1000U, 10U);
-		if (err < 0)
+		if (err != EOK)
 			goto err_exit;
 	}
 
