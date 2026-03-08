@@ -87,6 +87,7 @@ struct aq_firmware_ops
 
 int aq_fw_reset(struct aq_hw* hw);
 int aq_fw_ops_init(struct aq_hw* hw);
+void aq2_log_boot_fail(uint32_t status, const char *message);
 int aq2_fw_reboot(struct aq_hw *hw);
 int aq2_fw_set_wol(struct aq_hw *hw, uint32_t wol_flags,
     const uint8_t *mac);

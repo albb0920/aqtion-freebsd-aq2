@@ -70,6 +70,7 @@ __FBSDID("$FreeBSD$");
 
 #include "aq_device.h"
 #include "aq_fw.h"
+#include "aq_hostboot.h"
 #include "aq_hw.h"
 #include "aq_dbg.h"
 #include "aq_hw_llh.h"
@@ -546,27 +547,68 @@ aq_hw_ver_match(const aq_hw_fw_version* ver_expected, const aq_hw_fw_version* ve
 }
 
 static int
-aq_hw_init_ucp(struct aq_hw *hw)
+aq_hw_boot_pass(struct aq_hw *hw)
 {
-	int err = 0;
-	AQ_DBG_ENTER();
-
 	if (AQ_HW_IS_AQ2(hw)) {
-		err = aq2_fw_reboot(hw);
-		if (err != EOK) {
-			aq_log_error(
-			    "aq_hw_init_ucp(): A2 F/W reboot failed, err %d",
-			    err);
-			return (err);
-		}
-		return (EOK);
+		return (aq2_fw_reboot(hw));
 	}
 
 	hw->fw_version.raw = 0;
-	err = aq_fw_reset(hw);
+	return (aq_fw_reset(hw));
+}
+
+static int
+aq_hw_boot(struct aq_hw *hw)
+{
+	int err;
+
+	aq_hostboot_refresh_status(hw);
+
+	if (aq_hostboot_force(hw)) {
+		err = aq_hostboot_request_fw(hw);
+		if (err != 0)
+			goto out;
+	}
+
+	err = aq_hw_boot_pass(hw);
+	if (err == AQ_HOSTBOOT_IMAGE_REQUIRED && !aq_hostboot_force(hw)) {
+		err = aq_hostboot_request_fw(hw);
+		if (err != 0)
+			goto out;
+
+		err = aq_hw_boot_pass(hw);
+	}
+	if (err == AQ_HOSTBOOT_IMAGE_REQUIRED) {
+		aq_log_error("host boot firmware image is required but not found");
+		err = ENOENT;
+	}
+
+out:
+	aq_hostboot_release_fw(hw);
+	return (err);
+}
+
+static int
+aq_hw_init_ucp(struct aq_hw *hw)
+{
+	int err = 0;
+
+	AQ_DBG_ENTER();
+
+	err = aq_hw_boot(hw);
 	if (err != EOK) {
-		aq_log_error("aq_hw_init_ucp(): F/W reset failed, err %d", err);
+		if (AQ_HW_IS_AQ2(hw))
+			aq_log_error(
+			    "aq_hw_init_ucp(): A2 F/W reboot failed, err %d",
+			    err);
+		else
+			aq_log_error("aq_hw_init_ucp(): F/W reset failed, err %d",
+			    err);
 		return (err);
+	}
+	if (AQ_HW_IS_AQ2(hw)) {
+		AQ_DBG_EXIT(err);
+		return (EOK);
 	}
 
 	aq_hw_chip_features_init(hw, &hw->chip_features);
@@ -858,15 +900,9 @@ aq_hw_reset(struct aq_hw *hw)
 
 	AQ_DBG_ENTER();
 
-	if (AQ_HW_IS_AQ2(hw)) {
-	    err = aq2_fw_reboot(hw);
-	    if (err != EOK)
-	        goto err_exit;
-	} else {
-	    err = aq_fw_reset(hw);
-	    if (err != EOK)
-	        goto err_exit;
-	}
+	err = aq_hw_boot(hw);
+	if (err != EOK)
+		goto err_exit;
 	itr_irq_reg_res_dis_set(hw, 0);
 	itr_res_irq_set(hw, 1);
 
@@ -1274,7 +1310,7 @@ aq_hw_start(struct aq_hw *hw)
  *
  * @param aq_hw_s
  * @param aq_rx_filter_vlan VLAN filter configuration
- * @return 0 - OK, <0 - error
+ * @return 0 - OK, errno on error
  */
 int
 hw_atl_b0_hw_vlan_set(struct aq_hw_s *self, struct aq_rx_filter_vlan *aq_vlans)

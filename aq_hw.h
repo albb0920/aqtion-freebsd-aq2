@@ -43,6 +43,7 @@
 #include "aq_common.h"
 
 struct aq_stats_s;
+struct firmware;
 
 #define AQ_WRITE_REG(hw, reg, value) writel(((hw)->hw_addr + (reg)), htole32(value))
 
@@ -139,6 +140,16 @@ struct aq_hw_fc_info {
 
 #define AQ_FW_RPC_MAX 256U
 
+/* Values returned by the chip ID register. */
+#define AQ_CHIP_AQC100X		0xC100
+#define AQ_CHIP_AQC107X		0xC107
+#define AQ_CHIP_AQC108X		0xC108
+#define AQ_CHIP_AQC109X		0xC109
+#define AQ_CHIP_AQCC111X	0xC111
+#define AQ_CHIP_AQCC112X	0xC112
+#define AQ_CHIP_AQC111EX	0x111E
+#define AQ_CHIP_AQC112EX	0x112E
+
 struct aq_hw {
 	void *aq_dev;
 	uint8_t *hw_addr;
@@ -156,6 +167,8 @@ struct aq_hw {
 	uint16_t subsystem_device_id;
 	uint16_t vendor_id;
 	uint8_t  revision_id;
+	uint32_t chip_id;
+	uint32_t chip_rev;
 
 	/* Requested interrupt moderation configuration. */
 	int itr_mode;
@@ -170,6 +183,7 @@ struct aq_hw {
 	bool flash_present;
 	uint32_t chip_features;
 	uint64_t fw_caps;
+	const struct firmware *hostboot_fw;
 
 	bool lro_enabled;
 
