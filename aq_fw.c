@@ -44,6 +44,7 @@ __FBSDID("$FreeBSD$");
 #include "aq_common.h"
 
 #include "aq_hw.h"
+#include "aq_hostboot.h"
 #include "aq_hw_llh.h"
 #include "aq_hw_llh_internal.h"
 
@@ -160,14 +161,16 @@ aq_fw_reset(struct aq_hw* hw)
 		return (ENOTSUP);
 #else
 		trace(dbg_init, "RBL> Host Bootload mode");
-		break;
+		if (hw->hostboot_fw == NULL)
+			return (AQ_HOSTBOOT_IMAGE_REQUIRED);
+
+		err = aq_hostboot_legacy(hw);
+		if (err != 0)
+			return (err);
+
+		return (wait_init_mac_firmware_(hw));
 #endif // HOST_BOOT_DISABLE
 	}
-
-	/*
-	 * #todo: Host Boot
-	 */
-	aq_log_error("RBL> F/W Host Bootload not implemented");
 
 	return (ENOTSUP);
 }
@@ -305,6 +308,9 @@ mac_soft_reset_flb_(struct aq_hw* hw)
 int
 mac_soft_reset_rbl_(struct aq_hw* hw, aq_fw_bootloader_mode* mode)
 {
+	uint32_t rbl_status = 0;
+	int k;
+
 	trace(dbg_init, "RBL> MAC reset STARTED!");
 
 	reg_global_ctl2_set(hw, 0x40e1);
@@ -322,19 +328,23 @@ mac_soft_reset_rbl_(struct aq_hw* hw, aq_fw_bootloader_mode* mode)
 	mpi_tx_reg_res_dis_set(hw, 0);
 	reg_glb_standard_ctl1_set(hw, (reg_glb_standard_ctl1_get(hw) & ~glb_reg_res_dis_msk) | glb_soft_res_msk);
 
+	if (aq_hostboot_force(hw))
+		reg_glb_nvr_provisioning2_set(hw, 0x0);
 	reg_global_ctl2_set(hw, 0x40e0);
 
 	// Wait for RBL to finish boot process.
-	uint16_t rbl_status = 0;
-	for (int k = 0; k < RBL_TIMEOUT_MS; ++k) {
+	for (k = 0; k < RBL_TIMEOUT_MS; ++k) {
 		rbl_status = LOWORD(reg_glb_cpu_no_reset_scratchpad_get(hw, NO_RESET_SCRATCHPAD_RBL_STATUS));
 		if (rbl_status != 0 && rbl_status != 0xDEAD)
 			break;
 
 		msec_delay(1);
 	}
+	if (aq_hostboot_force(hw))
+		reg_glb_nvr_provisioning2_set(hw, 0xA0);
 
 	if (rbl_status == 0 || rbl_status == 0xDEAD) {
+		aq_log_error("RBL restart timed out");
 		trace_error(dbg_init, "RBL> RBL restart failed: timeout");
 		return (ETIMEDOUT);
 	}
@@ -348,6 +358,7 @@ mac_soft_reset_rbl_(struct aq_hw* hw, aq_fw_bootloader_mode* mode)
 			*mode = boot_mode_rbl_host_bootload;
 		trace(dbg_init, "RBL> reset complete! [Host Bootload]");
 	} else {
+		aq_log_error("unknown RBL status 0x%x", rbl_status);
 		trace_error(dbg_init, "unknown RBL status 0x%x", rbl_status);
 		return (EBUSY);
 	}

@@ -88,6 +88,169 @@ sysctl dev.aq.0.media_detect=1
 sysctl dev.aq.0.loopback=1   # 0=off,1=int,2=ext
 ```
 
+## Host Boot
+
+Host boot loads NIC firmware from the host at boot time instead of relying
+on the adapter flash. Use it when you want to try another firmware without
+flashing the card, or when the card needs a host-provided image to boot.
+
+Flash boot is the default. The driver only falls back to host boot
+automatically when the adapter needs a host-provided image, such as a NIC
+without flash ROM.
+
+### 1. Install the firmware image
+
+`hostboot_fw_image` is a FreeBSD firmware name as described in
+`firmware(9)`, not an arbitrary path. When you leave it unset, the driver
+picks a built-in name from the attached hardware:
+
+- `aqc100x` -> `if_atlantic_fw_80B1`
+- `aqc10xx` -> `if_atlantic_fw_87B1`
+- `aqc11xx` -> `if_atlantic_fw_91B1`
+- `aq2` -> `if_atlantic_fw_aq2`
+
+AQ2 `.clx` images must be patched with the correct MAC/PHY blobs for your
+board, otherwise host boot usually fails. You can do this with the
+[aq2\_clx\_customize script](https://gitlab.com/-/snippets/5969424)
+
+To package a firmware image, first create `Makefile`, with `KMOD` set to
+the firmware name you want the driver to request. Using the built-in name
+keeps `hostboot_fw_image` optional:
+
+```make
+KMOD= if_atlantic_fw_aq2
+FIRMWS= customized.clx:if_atlantic_fw_aq2
+.include <bsd.kmod.mk>
+```
+
+```sh
+make && make install`
+```
+
+If you pick a different KMOD name, ensure you use the same name for FIRMWS,
+set `hostboot_fw_image` to that name in the next section.
+
+#### FreeBSD 15+ Shortcut
+
+On FreeBSD 15 and later, you can skip the firmware KLD and install a raw
+binary file under `/boot/firmware` using the same firmware name. AQ2 example:
+
+```sh
+install -m 644 AQC113-DirtyWake-Swap_Bx-1.5.38_bdp_aqsign.clx \
+    /boot/firmware/if_atlantic_fw_aq2
+```
+
+If you want to keep the original filename, place it under
+`/boot/firmware` and point `hostboot_fw_image` at that filename:
+
+```sh
+install -m 644 AQC113-Antigua_Bx-1.5.42_bdp_aqsign.clx \
+    /boot/firmware/AQC113-Antigua_Bx-1.5.42_bdp_aqsign.clx
+```
+
+Then set `hostboot_fw_image="AQC113-Antigua_Bx-1.5.42_bdp_aqsign.clx"`
+using one of the methods in the next section.
+
+### 2. Forcing host boot
+
+These are loader tunables. Set them in `/boot/loader.conf` for boot-time
+use, or set them with `kenv(1)` before `kldload if_atlantic` if you are
+loading the driver manually after boot.
+
+Boot-time example in `/boot/loader.conf`:
+
+```conf
+hw.aq.hostboot_force=1
+```
+
+Add these only when you need them:
+
+```conf
+hw.aq.hostboot_fw_image="aq2testfw"
+hw.aq.hostboot_provisioning_selector="00010000"
+```
+
+One time forced host boot example:
+
+```sh
+kenv hw.aq.hostboot_force=1
+kenv hw.aq.hostboot_fw_image="aq2testfw"
+
+kldload if_atlantic
+```
+
+`hostboot_fw_image` is only needed when you are not using the built-in
+default name. Use the FreeBSD firmware name, not a path. For firmware
+KLDs this is the name exported by `FIRMWS`.
+
+On FreeBSD 15+ raw binary file, use the filename, or a relative path under
+`/boot/firmware` if you stored the file in a subdirectory.
+
+`hostboot_provisioning_selector` is only used with AQ1 hostboot images.
+
+Use resource hints in `/boot/device.hints` to override one adapter at boot
+time. Per-device hints take precedence over the global `hw.aq.*` values:
+
+```conf
+hint.aq.0.hostboot_force=1
+hint.aq.0.hostboot_fw_image="if_atlantic_fw_87B1"
+hint.aq.0.hostboot_provisioning_selector="12345678"
+```
+
+If the NIC attaches during early boot and you are using a firmware KLD,
+preload the firmware module in `/boot/loader.conf`:
+
+```conf
+if_atlantic_fw_aq2_load="YES"
+```
+
+On FreeBSD 15+, if you are using a raw blob instead of a firmware KLD,
+the loader can preload it directly:
+
+```conf
+aq2fw_load="YES"
+aq2fw_name="/boot/firmware/if_atlantic_fw_aq2"
+aq2fw_type="firmware"
+```
+
+### 3. Verify the result
+
+Runtime status is exposed read-only under `dev.aq.N` sysctl:
+
+```
+sysctl dev.aq.0.hostboot_force
+sysctl dev.aq.0.hostboot_fw_image
+sysctl dev.aq.0.fw_ver
+sysctl dev.aq.0.fw_iface_ver
+```
+
+Use `dev.aq.N.fw_ver` for the live firmware version reported by the driver.
+`pciconf -lV` shows VPD strings stored on the adapter and can stay at the
+flash version even when host boot loads a different bundle.
+
+### AQ1 only: choose a provisioning record
+
+AQ1 hostboot bundles can carry multiple provisioning records keyed by a
+32-bit subsystem identifier. By default the driver uses:
+
+```
+(subdevice << 16) | subvendor
+```
+
+You can inspect those values with `pciconf -lv`, which prints fields such as
+`subvendor=0x1d6a subdevice=0x0001`. The corresponding selector value is
+`00011d6a`.
+
+If your AQ1 bundle does not contain a record for your board, you can write
+a specific selector value to `hostboot_provisioning_selector` to force a
+different provisioning record, such as a generic one.
+
+### Troubleshooting
+
+If you loaded your firmware using a raw blob on FreeBSD 15+, FreeBSD
+keeps it registered until reboot. If you want to replace the firmware,
+you must reboot or choose a new image name.
+
 ## Accumulated Statistics
 
 Available counters depend on device family and firmware interface version.

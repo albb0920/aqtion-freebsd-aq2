@@ -72,6 +72,7 @@ __FBSDID("$FreeBSD$");
 
 #include "aq_device.h"
 #include "aq_fw.h"
+#include "aq_hostboot.h"
 #include "aq_hw.h"
 #include "aq_hw_llh.h"
 #include "aq_ring.h"
@@ -170,6 +171,7 @@ static pci_vendor_info_t aq_vendor_info_array[] = {
 
 /* Device setup, teardown, etc */
 static void *aq_register(device_t dev);
+static int aq_module_event(module_t mod, int what, void *arg);
 static int aq_if_attach_pre(if_ctx_t ctx);
 static int aq_if_attach_post(if_ctx_t ctx);
 static int aq_if_detach(if_ctx_t ctx);
@@ -258,10 +260,10 @@ static driver_t aq_driver = {
 };
 
 #if __FreeBSD_version >= 1400058
-DRIVER_MODULE(atlantic, pci, aq_driver, 0, 0);
+DRIVER_MODULE(atlantic, pci, aq_driver, aq_module_event, 0);
 #else
 static devclass_t aq_devclass;
-DRIVER_MODULE(atlantic, pci, aq_driver, aq_devclass, 0, 0);
+DRIVER_MODULE(atlantic, pci, aq_driver, aq_devclass, aq_module_event, 0);
 #endif
 
 MODULE_DEPEND(atlantic, pci, 1, 1, 1);
@@ -375,6 +377,21 @@ aq_register(device_t dev)
 	return (&aq_sctx_init);
 }
 
+static int
+aq_module_event(module_t mod __unused, int what, void *arg __unused)
+{
+	switch (what) {
+	case MOD_LOAD:
+		return (aq_hostboot_module_load());
+	case MOD_QUIESCE:
+		return (0);
+	case MOD_UNLOAD:
+		return (aq_hostboot_module_unload());
+	default:
+		return (EOPNOTSUPP);
+	}
+}
+
 static void
 aq_rss_prepare(struct aq_dev *softc, uint32_t *rss_hash_cfg)
 {
@@ -453,6 +470,12 @@ aq_if_attach_pre(if_ctx_t ctx)
 	hw = &softc->hw;
 	hw->aq_dev = softc;
 	hw->device_id = pci_get_device(softc->dev);
+	hw->vendor_id = pci_get_vendor(softc->dev);
+	hw->subsystem_vendor_id = pci_get_subvendor(softc->dev);
+	hw->subsystem_device_id = pci_get_subdevice(softc->dev);
+	hw->revision_id = pci_get_revid(softc->dev);
+	hw->chip_id = AQ_READ_REG(hw, 0x10);
+	hw->chip_rev = AQ_READ_REG(hw, 0x14);
 	switch (hw->device_id) {
 	case AQ_DEVICE_ID_AQC113DEV:
 	case AQ_DEVICE_ID_AQC113CS:
@@ -503,6 +526,8 @@ aq_if_attach_pre(if_ctx_t ctx)
 		softc->rx_filters.vlan_filters[i].queue = 0xFF;
 		softc->rx_filters.vlan_filters[i].location = (uint8_t)i;
 	}
+
+	aq_hostboot_init(softc);
 
 	/* Look up ops and caps. */
 	rc = aq_hw_mpi_create(hw);
@@ -1484,11 +1509,12 @@ aq_if_led_func(if_ctx_t ctx, int onoff)
 static int
 aq_hw_capabilities(struct aq_dev *softc)
 {
+	struct aq_hw *hw = &softc->hw;
 
-	if (pci_get_vendor(softc->dev) != AQUANTIA_VENDOR_ID)
+	if (hw->vendor_id != AQUANTIA_VENDOR_ID)
 		return (ENXIO);
 
-	switch (pci_get_device(softc->dev)) {
+	switch (hw->device_id) {
 	case AQ_DEVICE_ID_D100:
 	case AQ_DEVICE_ID_AQC100:
 	case AQ_DEVICE_ID_AQC100S:
@@ -2597,6 +2623,9 @@ aq_add_stats_sysctls(struct aq_dev *softc)
 
 #define QUEUE_NAME_LEN 32
 	char                    namebuf[QUEUE_NAME_LEN];
+
+	aq_hostboot_add_sysctls(softc, ctx, child);
+
 	/* RSS configuration */
 	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "print_rss_config",
 		CTLTYPE_STRING | CTLFLAG_RD, softc, 0,
