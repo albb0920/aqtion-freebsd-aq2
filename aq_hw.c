@@ -65,6 +65,7 @@ __FBSDID("$FreeBSD$");
 
 #include <net/if.h>
 #include <net/ethernet.h>
+#include <net/if_var.h>
 #include <net/iflib.h>
 #include <net/rss_config.h>
 

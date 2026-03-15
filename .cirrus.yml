@@ -10,11 +10,11 @@ task:
     - name: freebsd14-amd64
       freebsd_instance:
          image_family: freebsd-14-0-snap
-    - name: freebsd13-amd64
+    - name: freebsd13_5-amd64
       freebsd_instance:
-         image: freebsd-13-0-release-amd64
-    - name: freebsd12-amd64
+         image: freebsd-13-5-release-amd64
+    - name: freebsd15-amd64
       freebsd_instance:
-         image: freebsd-12-3-release-amd64
+         image: freebsd-15-0-release-amd64-ufs
   script:
     - make
