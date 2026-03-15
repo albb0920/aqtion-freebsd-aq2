@@ -1074,7 +1074,7 @@ aq_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
 	if (count >= aq_mc_slots(hw))
 		return (0);
 
-	index = AQ_HW_MAC_MIN + (u32)count;
+	index = AQ_HW_MAC_MIN + (uint32_t)count;
 	mac_addr = LLADDR((struct sockaddr_dl *)ifma->ifma_addr);
 	aq_hw_mac_addr_set(hw, mac_addr, index);
 
