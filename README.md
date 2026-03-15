@@ -2,6 +2,13 @@
 
 Atlantic driver for FreeBSD
 
+## Compatibility
+
+This driver targets supported FreeBSD releases only.
+
+The minimum supported version is FreeBSD 13.5. Older releases might still
+build, or build with minor local adjustments, but they are not supported by us.
+
 ## Interrupt moderation
 
 The driver exposes per-device interrupt moderation controls under
