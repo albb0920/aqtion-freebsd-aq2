@@ -3,18 +3,33 @@ env:
   ARCH: amd64
 
 task:
-  compute_engine_instance:
-    image_project: freebsd-org-cloud-dev
-    platform: freebsd
   matrix:
-    - name: freebsd14-amd64
+    - name: freebsd15_0-amd64
+      env:
+        FREEBSD_RELEASE: 15.0-RELEASE
       freebsd_instance:
-         image_family: freebsd-14-0-snap
-    - name: freebsd13-amd64
+         image: freebsd-15-0-release-amd64-ufs
+    - name: freebsd14_4-amd64
+      env:
+        FREEBSD_RELEASE: 14.4-RELEASE
       freebsd_instance:
-         image: freebsd-13-0-release-amd64
-    - name: freebsd12-amd64
+         image: freebsd-14-4-release-amd64-ufs
+    - name: freebsd14_3-amd64
+      env:
+        FREEBSD_RELEASE: 14.3-RELEASE
       freebsd_instance:
-         image: freebsd-12-3-release-amd64
-  script:
-    - make
+         image: freebsd-14-3-release-amd64-ufs-gce
+    - name: freebsd13_5-amd64
+      env:
+        FREEBSD_RELEASE: 13.5-RELEASE
+      freebsd_instance:
+         image: freebsd-13-5-release-amd64-gce
+  install_src_script: |
+    if [ ! -f /usr/src/sys/conf/kmod.mk ]; then
+      src_txz=/tmp/src.txz
+      src_url="https://download.freebsd.org/releases/amd64/amd64/${FREEBSD_RELEASE}/src.txz"
+      fetch -o "${src_txz}" "${src_url}"
+      tar -C / -xpf "${src_txz}"
+    fi
+    test -f /usr/src/sys/conf/kmod.mk
+  build_script: make
