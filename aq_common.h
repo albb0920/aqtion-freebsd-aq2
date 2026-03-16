@@ -65,6 +65,6 @@ do { \
 #define LOWORD(a) ((uint16_t)(a))
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
-#define AQ_VER        "0.0.5"
+#define AQ_VER        "0.1.0"
 
 #endif // _AQ_COMMON_H_
